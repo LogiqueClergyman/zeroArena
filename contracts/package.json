@@ -1,0 +1,22 @@
+{
+  "name": "zeroarena-contracts",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "compile": "hardhat compile",
+    "test": "hardhat test",
+    "deploy:0g": "hardhat run scripts/deploy.ts --network ogGalileo",
+    "balances:0g": "hardhat run scripts/verify-balances.ts --network ogGalileo",
+    "smoke:0g": "hardhat run scripts/smoke-create-fund-payout.ts --network ogGalileo"
+  },
+  "devDependencies": {
+    "@nomicfoundation/hardhat-ethers": "^3.0.8",
+    "@nomicfoundation/hardhat-toolbox": "^5.0.0",
+    "@types/node": "^20.14.0",
+    "hardhat": "^2.22.19",
+    "typescript": "^5.4.5"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.7"
+  }
+}

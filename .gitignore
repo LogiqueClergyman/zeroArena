@@ -1,0 +1,14 @@
+.env
+.env.local
+backend/.env
+backend/.env.local
+contracts/.env
+contracts/.env.local
+frontend/.env
+frontend/.env.local
+.agents
+.codex
+DEMO.md
+SESSION_E_HANDOFF.md
+SESSION_PROMPTS.md
+spec.md

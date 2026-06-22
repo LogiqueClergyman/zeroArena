@@ -1,0 +1,19 @@
+{
+  "name": "zeroarena-backend",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "npm run build && node --test \"dist/**/*.test.js\"",
+    "upload:rulebook": "npm run build && node dist/scripts/upload-rulebook.js"
+  },
+  "dependencies": {
+    "@0gfoundation/0g-compute-ts-sdk": "^0.8.4",
+    "@0gfoundation/0g-storage-ts-sdk": "^1.2.10",
+    "ajv": "^8.20.0",
+    "dotenv": "^16.4.7",
+    "ethers": "^6.13.1",
+    "fastify": "^5.8.5"
+  }
+}

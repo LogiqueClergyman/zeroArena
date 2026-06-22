@@ -1,0 +1,68 @@
+{
+  "actionSchema": {
+    "oneOf": [
+      {
+        "additionalProperties": false,
+        "properties": {
+          "message": {
+            "maxLength": 280,
+            "type": "string"
+          },
+          "phase": {
+            "const": "broadcast"
+          }
+        },
+        "required": [
+          "phase",
+          "message"
+        ],
+        "type": "object"
+      },
+      {
+        "additionalProperties": false,
+        "properties": {
+          "amount": {
+            "minimum": 0,
+            "type": "number"
+          },
+          "phase": {
+            "const": "bid"
+          }
+        },
+        "required": [
+          "phase",
+          "amount"
+        ],
+        "type": "object"
+      }
+    ]
+  },
+  "engine": {
+    "language": "typescript",
+    "sourceFile": "backend/src/games/SovereignBluff.ts"
+  },
+  "gameId": "sovereign-bluff",
+  "name": "Sovereign Bluff",
+  "rules": {
+    "bid": "Each player submits a hidden bid. Bids are revealed only after both players submit.",
+    "bidCost": "Both players lose their bid amount.",
+    "broadcast": "Each player may submit a public message up to 280 chars.",
+    "phases": [
+      "broadcast",
+      "bid",
+      "reveal"
+    ],
+    "players": 2,
+    "rounds": 5,
+    "startingBalance": 100,
+    "tieRule": "Treasury is split deterministically according to implementation-defined integer accounting.",
+    "timeoutBid": 0,
+    "treasuryAward": "Highest bidder receives the round treasury.",
+    "treasuryRange": [
+      10,
+      100
+    ],
+    "winner": "Highest final token balance after 5 rounds. If tied, deterministic player-order tiebreak selects one payout winner."
+  },
+  "version": "1.0.0"
+}
