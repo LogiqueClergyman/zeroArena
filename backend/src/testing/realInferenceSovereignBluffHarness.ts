@@ -71,6 +71,8 @@ export async function runRealInferenceSovereignBluffE2E(
     model: env.ZERO_G_SERVING_MODEL,
     autoFundBufferMultiplier: Number(env.ZERO_G_AUTO_FUND_BUFFER_MULTIPLIER ?? 1),
     requestSpacingMs: Number(env.ZERO_G_INFERENCE_REQUEST_SPACING_MS ?? 7000),
+    temperature: Number(env.ZERO_G_INFERENCE_TEMPERATURE ?? 0.85),
+    topP: Number(env.ZERO_G_INFERENCE_TOP_P ?? 0.9),
     privateKeysByRef: {
       AGENT_ALPHA_PRIVATE_KEY: env.AGENT_ALPHA_PRIVATE_KEY ?? "",
       AGENT_BETA_PRIVATE_KEY: env.AGENT_BETA_PRIVATE_KEY ?? "",

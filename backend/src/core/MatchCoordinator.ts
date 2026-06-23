@@ -414,12 +414,14 @@ export class MatchCoordinator {
 
     const board = match.state.board as {
       phase?: string;
+      broadcastsPerPlayer?: number;
       broadcasts?: Record<string, unknown>;
+      broadcastCounts?: Record<string, number>;
       bids?: Record<string, unknown>;
     };
 
     if (board.phase === "broadcast") {
-      return !Object.hasOwn(board.broadcasts ?? {}, playerId);
+      return (board.broadcastCounts?.[playerId] ?? 0) < (board.broadcastsPerPlayer ?? 1);
     }
     if (board.phase === "bid") {
       return !Object.hasOwn(board.bids ?? {}, playerId);

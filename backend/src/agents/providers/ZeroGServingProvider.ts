@@ -7,6 +7,8 @@ export interface ZeroGServingProviderConfig {
   model?: string;
   autoFundBufferMultiplier?: number;
   requestSpacingMs?: number;
+  temperature?: number;
+  topP?: number;
   privateKeysByRef: Record<string, string>;
 }
 
@@ -33,7 +35,8 @@ export class ZeroGServingProvider implements LLMProvider {
         },
         { role: "user", content: input.prompt },
       ],
-      temperature: 0.2,
+      temperature: this.config.temperature ?? 0.85,
+      top_p: this.config.topP ?? 0.9,
     };
     const content = JSON.stringify(body);
     const headers = await auth.signedHeaders(content);

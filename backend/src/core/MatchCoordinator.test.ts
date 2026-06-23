@@ -95,6 +95,14 @@ async function playFiveRounds(subject: MatchCoordinator): Promise<void> {
       phase: "broadcast",
       message: "Beta",
     });
+    await subject.submitMove("match_test", "alpha", {
+      phase: "broadcast",
+      message: "Alpha follow-up",
+    });
+    await subject.submitMove("match_test", "beta", {
+      phase: "broadcast",
+      message: "Beta follow-up",
+    });
     await subject.submitMove("match_test", "alpha", { phase: "bid", amount: 1 });
     await subject.submitMove("match_test", "beta", { phase: "bid", amount: 2 });
   }

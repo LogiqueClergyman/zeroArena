@@ -18,7 +18,7 @@ export class ScriptedSovereignBluffProvider implements LLMProvider {
     if (publicState?.phase === "broadcast") {
       return {
         phase: "broadcast",
-        message: this.message(prompt, Number(publicState.round ?? 1)),
+        message: this.message(prompt, publicState),
       };
     }
 
@@ -32,10 +32,12 @@ export class ScriptedSovereignBluffProvider implements LLMProvider {
     return { phase: "broadcast", message: "Waiting for the next legal phase." };
   }
 
-  private message(prompt: string, round: number): string {
-    return /Knox|AggressiveAgent/.test(prompt)
-      ? `Round ${round}: I am claiming this one hard; leave it and I owe you a quieter next vault.`
-      : `Round ${round}: Spend lightly here, and I will not punish your next confession.`;
+  private message(prompt: string, publicState: Record<string, unknown>): string {
+    const aggressive = /Knox|AggressiveAgent/.test(prompt);
+    const round = Number(publicState.round ?? 1);
+    const count = Number(publicState.myBroadcastCount ?? 0);
+    const index = Math.max(0, Math.min(SCRIPTED_LINES.length - 1, (round - 1) * 2 + count));
+    return aggressive ? SCRIPTED_LINES[index].aggressive : SCRIPTED_LINES[index].cautious;
   }
 
   private bidAmount(prompt: string, publicState: Record<string, unknown>): number {
@@ -68,3 +70,46 @@ export class ScriptedSovereignBluffProvider implements LLMProvider {
     }
   }
 }
+
+const SCRIPTED_LINES = [
+  {
+    cautious: "Take this vault cheaply; I want you confident before the larger trap.",
+    aggressive: "I will look reckless now so your safe bid feels clever.",
+  },
+  {
+    cautious: "Your threat is useful. I will let you overpay if you chase it.",
+    aggressive: "Keep your treaty. I profit more when you believe I need peace.",
+  },
+  {
+    cautious: "I am offering restraint here because the next vault matters more.",
+    aggressive: "Back down now and I may waste less ammunition later.",
+  },
+  {
+    cautious: "That offer smells expensive. I will price betrayal into my bid.",
+    aggressive: "You heard mercy; I meant a toll with teeth behind it.",
+  },
+  {
+    cautious: "You are nearly cornered, so I expect desperation rather than logic.",
+    aggressive: "I can burn tokens faster than you can rebuild nerve.",
+  },
+  {
+    cautious: "Spend your panic here; I will collect from the silence afterward.",
+    aggressive: "Call it a bluff if you want the scoreboard to answer.",
+  },
+  {
+    cautious: "I will not fight every vault, only the ones that break you.",
+    aggressive: "This is where I make caution look like surrender.",
+  },
+  {
+    cautious: "Your last bargain expired when you paid for pride.",
+    aggressive: "I am letting you choose which mistake becomes public.",
+  },
+  {
+    cautious: "Final table: I can afford honesty because you cannot afford doubt.",
+    aggressive: "Last vault, no treaty; I am buying the headline.",
+  },
+  {
+    cautious: "If you chase my shadow now, the archive will remember the price.",
+    aggressive: "Empty balance or full nerve, I am still forcing the reveal.",
+  },
+];

@@ -28,9 +28,26 @@ function submitRound(
     { phase: "broadcast", message: "Beta offers a truce." },
     "beta",
   );
+  state = engine.applyMove(
+    state,
+    { phase: "broadcast", message: "Alpha rejects the truce." },
+    "alpha",
+  );
+  state = engine.applyMove(
+    state,
+    { phase: "broadcast", message: "Beta calls that a bluff." },
+    "beta",
+  );
   state = engine.applyMove(state, { phase: "bid", amount: alphaBid }, "alpha");
   state = engine.applyMove(state, { phase: "bid", amount: betaBid }, "beta");
   return state;
+}
+
+function finishBroadcasts(engine: SovereignBluff, state: GameState): GameState {
+  state = engine.applyMove(state, { phase: "broadcast", message: "" }, "alpha");
+  state = engine.applyMove(state, { phase: "broadcast", message: "" }, "beta");
+  state = engine.applyMove(state, { phase: "broadcast", message: "" }, "alpha");
+  return engine.applyMove(state, { phase: "broadcast", message: "" }, "beta");
 }
 
 test("plays a normal five-round Sovereign Bluff game", () => {
@@ -62,6 +79,11 @@ test("rejects moves submitted in the wrong phase", () => {
 
   let next = engine.applyMove(state, { phase: "broadcast", message: "" }, "alpha");
   next = engine.applyMove(next, { phase: "broadcast", message: "" }, "beta");
+  assert.equal(
+    engine.validateMove(next, { phase: "broadcast", message: "second alpha" }, "alpha").ok,
+    true,
+  );
+  next = finishBroadcasts(engine, state);
   const validation = engine.validateMove(
     next,
     { phase: "broadcast", message: "late" },
@@ -74,8 +96,7 @@ test("rejects moves submitted in the wrong phase", () => {
 
 test("rejects invalid bid shapes and amounts", () => {
   const { engine, state } = activeState();
-  let next = engine.applyMove(state, { phase: "broadcast", message: "" }, "alpha");
-  next = engine.applyMove(next, { phase: "broadcast", message: "" }, "beta");
+  const next = finishBroadcasts(engine, state);
 
   assert.equal(engine.validateMove(next, { phase: "bid", amount: -1 }, "alpha").ok, false);
   assert.equal(engine.validateMove(next, { phase: "bid", amount: 1.5 }, "alpha").ok, false);
@@ -87,8 +108,7 @@ test("rejects invalid bid shapes and amounts", () => {
 
 test("rejects bids over current balance", () => {
   const { engine, state } = activeState();
-  let next = engine.applyMove(state, { phase: "broadcast", message: "" }, "alpha");
-  next = engine.applyMove(next, { phase: "broadcast", message: "" }, "beta");
+  const next = finishBroadcasts(engine, state);
 
   const validation = engine.validateMove(next, { phase: "bid", amount: 101 }, "alpha");
 
@@ -116,22 +136,36 @@ test("public state includes prior messages and full conversation context", () =>
 
   const next = submitRound(engine, state, 7, 9);
   const publicAlpha = engine.getPublicState(next, "alpha") as {
-    previousRounds: Array<{ myMessage: string; opponentMessage: string }>;
+    previousRounds: Array<{
+      myMessage: string;
+      opponentMessage: string;
+      myMessages: string[];
+      opponentMessages: string[];
+    }>;
     conversation: Array<{ round: number; speaker: "me" | "opponent"; text: string }>;
   };
 
-  assert.equal(publicAlpha.previousRounds[0].myMessage, "Alpha says I am bidding high.");
-  assert.equal(publicAlpha.previousRounds[0].opponentMessage, "Beta offers a truce.");
+  assert.equal(publicAlpha.previousRounds[0].myMessage, "Alpha rejects the truce.");
+  assert.equal(publicAlpha.previousRounds[0].opponentMessage, "Beta calls that a bluff.");
+  assert.deepEqual(publicAlpha.previousRounds[0].myMessages, [
+    "Alpha says I am bidding high.",
+    "Alpha rejects the truce.",
+  ]);
+  assert.deepEqual(publicAlpha.previousRounds[0].opponentMessages, [
+    "Beta offers a truce.",
+    "Beta calls that a bluff.",
+  ]);
   assert.deepEqual(publicAlpha.conversation, [
     { round: 1, speaker: "me", text: "Alpha says I am bidding high.", playerId: "alpha" },
     { round: 1, speaker: "opponent", text: "Beta offers a truce.", playerId: "beta" },
+    { round: 1, speaker: "me", text: "Alpha rejects the truce.", playerId: "alpha" },
+    { round: 1, speaker: "opponent", text: "Beta calls that a bluff.", playerId: "beta" },
   ]);
 });
 
 test("uses zero bid as timeout fallback during bid phase", () => {
   const { engine, state } = activeState();
-  let next = engine.applyMove(state, { phase: "broadcast", message: "" }, "alpha");
-  next = engine.applyMove(next, { phase: "broadcast", message: "" }, "beta");
+  let next = finishBroadcasts(engine, state);
   next = engine.applyMove(next, { phase: "bid", amount: 9 }, "alpha");
   next = engine.applyBidTimeout(next, "beta");
 
@@ -144,6 +178,8 @@ test("uses zero bid as timeout fallback during bid phase", () => {
     treasury: 64,
     myMessage: "",
     opponentMessage: "",
+    myMessages: ["", ""],
+    opponentMessages: ["", ""],
     myBid: 0,
     opponentBid: 9,
     winner: "alpha",
@@ -154,8 +190,7 @@ test("uses zero bid as timeout fallback during bid phase", () => {
 
 test("keeps bids hidden until both players submit", () => {
   const { engine, state } = activeState();
-  let next = engine.applyMove(state, { phase: "broadcast", message: "" }, "alpha");
-  next = engine.applyMove(next, { phase: "broadcast", message: "" }, "beta");
+  let next = finishBroadcasts(engine, state);
   next = engine.applyMove(next, { phase: "bid", amount: 7 }, "alpha");
 
   const ui = engine.renderForUI(next).data as {

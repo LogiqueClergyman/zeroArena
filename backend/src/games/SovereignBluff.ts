@@ -33,6 +33,7 @@ export interface RoundSummary {
   winner?: PlayerId;
   balancesAfter: Record<PlayerId, number>;
   messages: Record<PlayerId, string>;
+  roundMessages: Record<PlayerId, string[]>;
 }
 
 interface MessageRecord {
@@ -44,10 +45,12 @@ interface MessageRecord {
 
 export interface SovereignBluffBoard {
   totalRounds: number;
+  broadcastsPerPlayer: number;
   phase: SovereignBluffPhase;
   treasuries: number[];
   balances: Record<PlayerId, number>;
   broadcasts: Record<PlayerId, string>;
+  broadcastCounts: Record<PlayerId, number>;
   bids: Record<PlayerId, number>;
   messages: MessageRecord[];
   history: RoundSummary[];
@@ -60,6 +63,7 @@ type SovereignBluffMove =
   | { phase: "bid"; amount: number };
 
 const TOTAL_ROUNDS = 5;
+const BROADCASTS_PER_PLAYER = 2;
 const STARTING_BALANCE = 100;
 const TREASURIES = [64, 18, 91, 37, 76] as const;
 const MAX_FAILURES_BEFORE_FORFEIT = 3;
@@ -95,12 +99,14 @@ export class SovereignBluff implements IGameEngine {
       status: "waiting",
       board: {
         totalRounds: TOTAL_ROUNDS,
+        broadcastsPerPlayer: BROADCASTS_PER_PLAYER,
         phase: "broadcast",
         treasuries: [...TREASURIES],
         balances: Object.fromEntries(
           players.map((player) => [player, STARTING_BALANCE]),
         ),
         broadcasts: {},
+        broadcastCounts: Object.fromEntries(players.map((player) => [player, 0])),
         bids: {},
         messages: [],
         history: [],
@@ -126,11 +132,23 @@ export class SovereignBluff implements IGameEngine {
       opponentBalance: board.balances[opponent],
       myLastMessage: board.broadcasts[forPlayer],
       opponentLastMessage: board.broadcasts[opponent],
+      broadcastTurnsPerPlayer: BROADCASTS_PER_PLAYER,
+      myBroadcastCount: board.broadcastCounts[forPlayer] ?? 0,
+      opponentBroadcastCount: board.broadcastCounts[opponent] ?? 0,
+      currentRoundConversation: board.messages
+        .filter((message) => message.round === state.round)
+        .map((message) => ({
+          playerId: message.playerId,
+          speaker: message.playerId === forPlayer ? "me" : "opponent",
+          text: message.text,
+        })),
       previousRounds: board.history.map((round) => ({
         round: round.round,
         treasury: round.treasury,
         myMessage: round.messages[forPlayer],
         opponentMessage: round.messages[opponent],
+        myMessages: round.roundMessages[forPlayer] ?? [],
+        opponentMessages: round.roundMessages[opponent] ?? [],
         myBid: round.bids[forPlayer],
         opponentBid: round.bids[opponent],
         winner: round.winner,
@@ -189,6 +207,7 @@ export class SovereignBluff implements IGameEngine {
 
     if (typedMove.phase === "broadcast") {
       board.broadcasts[player] = typedMove.message;
+      board.broadcastCounts[player] = (board.broadcastCounts[player] ?? 0) + 1;
       board.messages.push({
         playerId: player,
         round: next.round,
@@ -196,7 +215,7 @@ export class SovereignBluff implements IGameEngine {
         timestamp: new Date().toISOString(),
       });
 
-      if (next.players.every((id) => Object.hasOwn(board.broadcasts, id))) {
+      if (next.players.every((id) => (board.broadcastCounts[id] ?? 0) >= BROADCASTS_PER_PLAYER)) {
         board.phase = "bid";
       }
       return next;
@@ -303,8 +322,8 @@ export class SovereignBluff implements IGameEngine {
     if (Object.keys(move).some((key) => !["phase", "message"].includes(key))) {
       return { ok: false, error: "Broadcast has additional properties" };
     }
-    if (Object.hasOwn(board.broadcasts, player)) {
-      return { ok: false, error: "Player already broadcast this round" };
+    if ((board.broadcastCounts[player] ?? 0) >= BROADCASTS_PER_PLAYER) {
+      return { ok: false, error: "Player already completed broadcast turns this round" };
     }
     if (typeof move.message !== "string") {
       return { ok: false, error: "Broadcast message must be a string" };
@@ -367,6 +386,15 @@ export class SovereignBluff implements IGameEngine {
       board.balances[second] += treasury / 2;
     }
 
+    const roundMessages = Object.fromEntries(
+      state.players.map((player) => [
+        player,
+        board.messages
+          .filter((message) => message.round === state.round && message.playerId === player)
+          .map((message) => message.text),
+      ]),
+    ) as Record<PlayerId, string[]>;
+
     board.history.push({
       round: state.round,
       treasury,
@@ -374,9 +402,11 @@ export class SovereignBluff implements IGameEngine {
       winner,
       balancesAfter: { ...board.balances },
       messages: { ...board.broadcasts },
+      roundMessages,
     });
 
     board.broadcasts = {};
+    board.broadcastCounts = Object.fromEntries(state.players.map((player) => [player, 0]));
     board.bids = {};
 
     if (state.round >= board.totalRounds) {
