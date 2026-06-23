@@ -5,12 +5,16 @@ export interface ZeroGServingProviderConfig {
   rpcUrl: string;
   providerAddress?: string;
   model?: string;
+  autoFundBufferMultiplier?: number;
+  requestSpacingMs?: number;
   privateKeysByRef: Record<string, string>;
 }
 
 export class ZeroGServingProvider implements LLMProvider {
   readonly mode = "0g-serving" as const;
   private readonly authByRef = new Map<string, ZeroGWalletAuth>();
+  private throttleQueue: Promise<void> = Promise.resolve();
+  private nextRequestAt = 0;
 
   constructor(private readonly config: ZeroGServingProviderConfig) {}
 
@@ -34,6 +38,7 @@ export class ZeroGServingProvider implements LLMProvider {
     const content = JSON.stringify(body);
     const headers = await auth.signedHeaders(content);
     const endpoint = this.chatCompletionsEndpoint(service.endpoint);
+    await this.waitForRateLimitSlot();
     const response = await fetch(endpoint, {
       method: "POST",
       headers: { "Content-Type": "application/json", ...headers },
@@ -72,6 +77,7 @@ export class ZeroGServingProvider implements LLMProvider {
       rpcUrl: this.config.rpcUrl,
       providerAddress: this.config.providerAddress,
       privateKey,
+      autoFundBufferMultiplier: this.config.autoFundBufferMultiplier,
     });
     this.authByRef.set(privateKeyRef, auth);
     return auth;
@@ -84,4 +90,30 @@ export class ZeroGServingProvider implements LLMProvider {
     }
     return `${trimmed}/chat/completions`;
   }
+
+  private async waitForRateLimitSlot(): Promise<void> {
+    const spacingMs = this.config.requestSpacingMs ?? 7_000;
+    if (spacingMs <= 0) {
+      return;
+    }
+
+    const previous = this.throttleQueue;
+    let release!: () => void;
+    this.throttleQueue = new Promise((resolve) => {
+      release = resolve;
+    });
+
+    await previous;
+    const now = Date.now();
+    const waitMs = Math.max(0, this.nextRequestAt - now);
+    if (waitMs > 0) {
+      await delay(waitMs);
+    }
+    this.nextRequestAt = Date.now() + spacingMs;
+    release();
+  }
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }

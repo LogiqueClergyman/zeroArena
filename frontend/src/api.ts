@@ -102,6 +102,7 @@ export interface MatchUiResponse {
   receipt?: MatchReceipt;
   render: { kind: string; data: MatchRenderData };
   agentLogs: AgentLog[];
+  runnerError?: string;
   error?: string;
 }
 
@@ -143,12 +144,16 @@ export async function getMatchUi(matchId: string): Promise<MatchUiResponse> {
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const headers =
+    init?.body === undefined
+      ? init?.headers
+      : {
+          "content-type": "application/json",
+          ...(init?.headers ?? {}),
+        };
   const response = await fetch(`${baseUrl}${path}`, {
     ...init,
-    headers: {
-      "content-type": "application/json",
-      ...(init?.headers ?? {}),
-    },
+    headers,
   });
   const text = await response.text();
   const data = text ? JSON.parse(text) : null;

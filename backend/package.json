@@ -6,11 +6,16 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "test": "npm run build && node --test \"dist/**/*.test.js\"",
-    "upload:rulebook": "npm run build && node dist/scripts/upload-rulebook.js"
+    "e2e:game": "npm run build && node dist/scripts/e2e-game.js",
+    "e2e:game:real": "npm run build && node dist/scripts/e2e-game-real.js",
+    "test:e2e:real": "npm run build && node --test dist/agents/AgentRunner.real-inference.e2e.test.js",
+    "upload:rulebook": "npm run build && node dist/scripts/upload-rulebook.js",
+    "setup:compute": "npm run build && node dist/scripts/setup-compute-ledgers.js"
   },
   "dependencies": {
     "@0gfoundation/0g-compute-ts-sdk": "^0.8.4",
     "@0gfoundation/0g-storage-ts-sdk": "^1.2.10",
+    "@fastify/cors": "^11.2.0",
     "ajv": "^8.20.0",
     "dotenv": "^16.4.7",
     "ethers": "^6.13.1",

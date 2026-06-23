@@ -77,9 +77,11 @@ export async function registerRoutes(
       matchId: match.id,
       gameId: match.gameId,
       status: match.status,
+      error: match.failureReason,
       receipt: match.receipt,
       render: { ...rendered, data },
       agentLogs: runner.getLogs().filter((log) => log.playerId in playerIndex(match.players)),
+      runnerError: runner.getLastError(),
     };
   });
 

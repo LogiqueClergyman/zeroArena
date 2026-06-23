@@ -72,7 +72,7 @@ function HomeScreen({ navigate }: { navigate: (to: string) => void }) {
     try {
       const match = await createDemoMatch();
       void startDemoAgents(match.matchId).catch((err) => {
-        console.error("Demo agent runner failed", err);
+        setError(`Demo agent runner failed: ${errorMessage(err)}`);
       });
       navigate(`/match/${match.matchId}`);
     } catch (err) {
@@ -150,7 +150,7 @@ function MatchViewer({ matchId, navigate }: { matchId: string; navigate: (to: st
     if (!startedRef.current) {
       startedRef.current = true;
       void startDemoAgents(matchId).catch((err) => {
-        console.error("Demo agent runner unavailable", err);
+        setError(`Demo agent runner failed: ${errorMessage(err)}`);
       });
     }
   }, [matchId]);
@@ -216,6 +216,7 @@ function MatchViewer({ matchId, navigate }: { matchId: string; navigate: (to: st
       </header>
 
       {error ? <StatusBanner tone="bad" label="Polling error" value={error} /> : null}
+      {ui?.runnerError ? <StatusBanner tone="bad" label="Agent runner error" value={ui.runnerError} /> : null}
       {loading ? <StatusBanner tone="warn" label="Loading" value="Waiting for /match/:id/ui." /> : null}
 
       <SovereignBluffStage

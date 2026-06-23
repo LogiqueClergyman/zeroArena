@@ -5,6 +5,7 @@ export interface ZeroGWalletAuthConfig {
   rpcUrl: string;
   providerAddress?: string;
   privateKey: string;
+  autoFundBufferMultiplier?: number;
 }
 
 export interface ZeroGServiceSelection {
@@ -28,7 +29,10 @@ export class ZeroGWalletAuth {
     const wallet = new ethers.Wallet(this.config.privateKey, provider);
     const broker = await createZGComputeNetworkBroker(wallet as never);
     const providerAddress = this.config.providerAddress ?? (await this.firstChatbotProvider(broker));
-    await broker.inference.startAutoFunding(providerAddress);
+    await broker.inference.acknowledgeProviderSigner(providerAddress);
+    await broker.inference.startAutoFunding(providerAddress, {
+      bufferMultiplier: this.config.autoFundBufferMultiplier ?? 1,
+    });
     const metadata = await broker.inference.getServiceMetadata(providerAddress);
     this.selection = {
       broker,

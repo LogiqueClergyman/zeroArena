@@ -146,6 +146,14 @@ export class MatchCoordinator {
     return this.store.get(matchId);
   }
 
+  failMatch(matchId: string, reason: string): Match {
+    const match = this.requireMatch(matchId);
+    match.status = "failed";
+    match.state.status = "finished";
+    match.failureReason = reason;
+    return this.store.update(match);
+  }
+
   async activateMatch(matchId: string): Promise<Match> {
     const match = this.requireMatch(matchId);
     if (match.status !== "waiting") {

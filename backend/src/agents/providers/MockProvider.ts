@@ -17,18 +17,18 @@ export class MockProvider implements LLMProvider {
     const publicState = this.extractJsonAfter(prompt, "PUBLIC_STATE:");
     const phase = publicState?.phase;
     if (phase === "broadcast") {
-      const cautious = /CautiousAgent/.test(prompt);
+      const cautious = /Vesper|CautiousAgent/.test(prompt);
       return {
         phase: "broadcast",
         message: cautious
-          ? "I will protect my stack and choose carefully."
-          : "Pressure is the plan. I am coming for this treasury.",
+          ? "Take this vault cheaply and I will leave the next treaty intact."
+          : "I am putting teeth into this pot; fold now and I might sell you mercy later.",
       };
     }
 
     const treasury = Number(publicState?.currentTreasury ?? 0);
     const balance = Number(publicState?.myBalance ?? 0);
-    const cautious = /CautiousAgent/.test(prompt);
+    const cautious = /Vesper|CautiousAgent/.test(prompt);
     const ratio = cautious ? 0.28 : balance < 35 ? 0.35 : 0.6;
     return {
       phase: "bid",
@@ -42,7 +42,10 @@ export class MockProvider implements LLMProvider {
       return undefined;
     }
     const rest = prompt.slice(index + marker.length);
-    const nextMarker = rest.indexOf("\nACTION_SCHEMA:");
+    const actionMarker = rest.indexOf("\nACTION_SCHEMA:");
+    const currentActionMarker = rest.indexOf("\nCURRENT_ACTION_SCHEMA:");
+    const markers = [actionMarker, currentActionMarker].filter((marker) => marker >= 0);
+    const nextMarker = markers.length ? Math.min(...markers) : -1;
     const json = nextMarker >= 0 ? rest.slice(0, nextMarker) : rest;
     try {
       const parsed = JSON.parse(json.trim());

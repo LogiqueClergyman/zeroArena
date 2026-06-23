@@ -120,6 +120,18 @@ test("coordinator cannot activate a match before prize pool is fully funded", as
   );
 });
 
+test("coordinator can mark a setup failure without leaving a live match", () => {
+  const subject = coordinator();
+  subject.createMatch("sovereign-bluff", players);
+
+  const failed = subject.failMatch("match_test", "contract setup failed");
+
+  assert.equal(failed.status, "failed");
+  assert.equal(failed.state.status, "finished");
+  assert.equal(failed.failureReason, "contract setup failed");
+  assert.deepEqual(subject.listLiveMatches(), []);
+});
+
 test("coordinator stores a final receipt after archive and payout", async () => {
   const subject = coordinator();
   subject.createMatch("sovereign-bluff", players);

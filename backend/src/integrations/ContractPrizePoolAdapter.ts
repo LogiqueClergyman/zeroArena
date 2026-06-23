@@ -145,6 +145,9 @@ export class ContractPrizePoolAdapter implements PrizePoolAdapter {
   async getPool(input: { matchId: string }): Promise<PrizePoolSnapshot> {
     const matchKey = matchIdToBytes32(input.matchId);
     const matchData = await this.contract.matches(matchKey);
+    if (matchData.requiredStake === 0n && matchData.rulesHash === ethers.ZeroHash) {
+      throw new Error(`PrizePool match pool does not exist for ${input.matchId}`);
+    }
     const fullyFunded = await this.contract.isFullyFunded(matchKey);
     if (matchData.rulesHash !== this.options.rulesHash) {
       throw new Error(

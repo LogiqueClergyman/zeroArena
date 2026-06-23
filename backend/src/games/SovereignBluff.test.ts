@@ -18,8 +18,16 @@ function submitRound(
   alphaBid: number,
   betaBid: number,
 ): GameState {
-  state = engine.applyMove(state, { phase: "broadcast", message: "Alpha" }, "alpha");
-  state = engine.applyMove(state, { phase: "broadcast", message: "Beta" }, "beta");
+  state = engine.applyMove(
+    state,
+    { phase: "broadcast", message: "Alpha says I am bidding high." },
+    "alpha",
+  );
+  state = engine.applyMove(
+    state,
+    { phase: "broadcast", message: "Beta offers a truce." },
+    "beta",
+  );
   state = engine.applyMove(state, { phase: "bid", amount: alphaBid }, "alpha");
   state = engine.applyMove(state, { phase: "bid", amount: betaBid }, "beta");
   return state;
@@ -98,9 +106,26 @@ test("splits treasury on tied bids", () => {
     previousRounds: Array<{ winner?: string }>;
   };
 
-  assert.equal(publicAlpha.myBalance, 95);
-  assert.equal(publicAlpha.opponentBalance, 95);
+  assert.equal(publicAlpha.myBalance, 122);
+  assert.equal(publicAlpha.opponentBalance, 122);
   assert.equal(publicAlpha.previousRounds[0].winner, undefined);
+});
+
+test("public state includes prior messages and full conversation context", () => {
+  const { engine, state } = activeState();
+
+  const next = submitRound(engine, state, 7, 9);
+  const publicAlpha = engine.getPublicState(next, "alpha") as {
+    previousRounds: Array<{ myMessage: string; opponentMessage: string }>;
+    conversation: Array<{ round: number; speaker: "me" | "opponent"; text: string }>;
+  };
+
+  assert.equal(publicAlpha.previousRounds[0].myMessage, "Alpha says I am bidding high.");
+  assert.equal(publicAlpha.previousRounds[0].opponentMessage, "Beta offers a truce.");
+  assert.deepEqual(publicAlpha.conversation, [
+    { round: 1, speaker: "me", text: "Alpha says I am bidding high.", playerId: "alpha" },
+    { round: 1, speaker: "opponent", text: "Beta offers a truce.", playerId: "beta" },
+  ]);
 });
 
 test("uses zero bid as timeout fallback during bid phase", () => {
@@ -116,12 +141,14 @@ test("uses zero bid as timeout fallback during bid phase", () => {
 
   assert.deepEqual(publicBeta.previousRounds[0], {
     round: 1,
-    treasury: 10,
+    treasury: 64,
+    myMessage: "",
+    opponentMessage: "",
     myBid: 0,
     opponentBid: 9,
     winner: "alpha",
     myBalanceAfter: 100,
-    opponentBalanceAfter: 101,
+    opponentBalanceAfter: 155,
   });
 });
 

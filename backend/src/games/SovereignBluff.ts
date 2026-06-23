@@ -61,7 +61,7 @@ type SovereignBluffMove =
 
 const TOTAL_ROUNDS = 5;
 const STARTING_BALANCE = 100;
-const TREASURIES = [10, 30, 50, 70, 100] as const;
+const TREASURIES = [64, 18, 91, 37, 76] as const;
 const MAX_FAILURES_BEFORE_FORFEIT = 3;
 
 function boardOf(state: GameState): SovereignBluffBoard {
@@ -129,11 +129,19 @@ export class SovereignBluff implements IGameEngine {
       previousRounds: board.history.map((round) => ({
         round: round.round,
         treasury: round.treasury,
+        myMessage: round.messages[forPlayer],
+        opponentMessage: round.messages[opponent],
         myBid: round.bids[forPlayer],
         opponentBid: round.bids[opponent],
         winner: round.winner,
         myBalanceAfter: round.balancesAfter[forPlayer],
         opponentBalanceAfter: round.balancesAfter[opponent],
+      })),
+      conversation: board.messages.map((message) => ({
+        round: message.round,
+        playerId: message.playerId,
+        speaker: message.playerId === forPlayer ? "me" : "opponent",
+        text: message.text,
       })),
     };
   }

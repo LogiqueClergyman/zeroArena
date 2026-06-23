@@ -1,4 +1,5 @@
 import Fastify from "fastify";
+import cors from "@fastify/cors";
 import { config as loadEnv } from "dotenv";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -28,24 +29,30 @@ class DemoMatchService implements DemoMatchFactory {
     players: Array<{ id: string; name: string; walletAddress: string }>;
   }> {
     const match = this.coordinator.createMatch("sovereign-bluff", this.players);
-    await this.prizePool.createAndFund({
-      matchId: match.id,
-      players: this.players,
-    });
-    await this.coordinator.activateMatch(match.id);
-    return {
-      matchId: match.id,
-      players: match.players.map((player) => ({
-        id: player.id,
-        name: player.name,
-        walletAddress: player.walletAddress,
-      })),
-    };
+    try {
+      await this.prizePool.createAndFund({
+        matchId: match.id,
+        players: this.players,
+      });
+      await this.coordinator.activateMatch(match.id);
+      return {
+        matchId: match.id,
+        players: match.players.map((player) => ({
+          id: player.id,
+          name: player.name,
+          walletAddress: player.walletAddress,
+        })),
+      };
+    } catch (error) {
+      this.coordinator.failMatch(match.id, errorMessage(error));
+      throw error;
+    }
   }
 }
 
 export async function buildServer(env: NodeJS.ProcessEnv = process.env) {
   validateStartup(env);
+  const localDevAllowMocks = env.LOCAL_DEV_ALLOW_MOCKS === "true";
   const engine = new SovereignBluff();
   const engines = [engine];
   const prizePool = new ContractPrizePoolAdapter({
@@ -85,6 +92,8 @@ export async function buildServer(env: NodeJS.ProcessEnv = process.env) {
           rpcUrl: env.ZERO_G_EVM_RPC_URL ?? env.EVM_RPC_URL ?? "https://evmrpc-testnet.0g.ai",
           providerAddress: env.ZERO_G_PROVIDER_ADDRESS,
           model: env.ZERO_G_SERVING_MODEL,
+          autoFundBufferMultiplier: Number(env.ZERO_G_AUTO_FUND_BUFFER_MULTIPLIER ?? 1),
+          requestSpacingMs: Number(env.ZERO_G_INFERENCE_REQUEST_SPACING_MS ?? 7000),
           privateKeysByRef: {
             AGENT_ALPHA_PRIVATE_KEY: env.AGENT_ALPHA_PRIVATE_KEY ?? "",
             AGENT_BETA_PRIVATE_KEY: env.AGENT_BETA_PRIVATE_KEY ?? "",
@@ -114,6 +123,7 @@ export async function buildServer(env: NodeJS.ProcessEnv = process.env) {
       walletAddress: players[0].walletAddress,
       privateKeyRef: "AGENT_ALPHA_PRIVATE_KEY",
       provider,
+      allowMockFallback: localDevAllowMocks,
       validatorForSchema: (schema) => runner.validatorForSchema(schema),
     }),
     createAggressiveAgent({
@@ -121,11 +131,16 @@ export async function buildServer(env: NodeJS.ProcessEnv = process.env) {
       walletAddress: players[1].walletAddress,
       privateKeyRef: "AGENT_BETA_PRIVATE_KEY",
       provider,
+      allowMockFallback: localDevAllowMocks,
       validatorForSchema: (schema) => runner.validatorForSchema(schema),
     }),
   ];
   const activeRunner = new AgentRunner(coordinator, agents);
   const app = Fastify({ logger: true });
+  await app.register(cors, {
+    origin: parseCorsOrigins(env.CORS_ORIGIN),
+    methods: ["GET", "POST", "OPTIONS"],
+  });
   await registerRoutes(app, {
     coordinator,
     engines,
@@ -135,10 +150,32 @@ export async function buildServer(env: NodeJS.ProcessEnv = process.env) {
   return app;
 }
 
-function validateStartup(env: NodeJS.ProcessEnv): void {
-  const mode = env.AGENT_INFERENCE_MODE ?? "mock";
+function parseCorsOrigins(value: string | undefined): Array<string | RegExp> {
+  return (value ?? "http://localhost:5173,http://127.0.0.1:5173")
+    .split(",")
+    .map((origin) => origin.trim())
+    .filter(Boolean)
+    .concat(["/^http:\\/\\/localhost:517\\d$/", "/^http:\\/\\/127\\.0\\.0\\.1:517\\d$/"])
+    .map((origin) => {
+      if (origin.startsWith("/") && origin.endsWith("/")) {
+        return new RegExp(origin.slice(1, -1));
+      }
+      return origin;
+    });
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+export function validateStartup(env: NodeJS.ProcessEnv): void {
+  const localDevAllowMocks = env.LOCAL_DEV_ALLOW_MOCKS === "true";
+  const mode = env.AGENT_INFERENCE_MODE ?? (localDevAllowMocks ? "mock" : "");
   if (mode !== "0g-serving" && mode !== "mock") {
-    throw new Error("AGENT_INFERENCE_MODE must be either 0g-serving or mock");
+    throw new Error("AGENT_INFERENCE_MODE must be 0g-serving; use LOCAL_DEV_ALLOW_MOCKS=true for mock");
+  }
+  if (!localDevAllowMocks && mode !== "0g-serving") {
+    throw new Error("Judged mode requires AGENT_INFERENCE_MODE=0g-serving");
   }
   if (mode === "0g-serving") {
     const missing = [
@@ -152,6 +189,12 @@ function validateStartup(env: NodeJS.ProcessEnv): void {
         `AGENT_INFERENCE_MODE=0g-serving requires configured agent wallets: missing ${missing.join(", ")}`,
       );
     }
+  }
+  if (!localDevAllowMocks && env.ARCHIVE_MODE !== "0g") {
+    throw new Error("Judged mode requires ARCHIVE_MODE=0g");
+  }
+  if (localDevAllowMocks && env.ARCHIVE_MODE && env.ARCHIVE_MODE !== "0g" && env.ARCHIVE_MODE !== "mock") {
+    throw new Error("ARCHIVE_MODE must be either 0g or mock");
   }
   const payoutMode = env.PAYOUT_MODE ?? "contract";
   if (payoutMode !== "contract") {
