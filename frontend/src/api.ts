@@ -106,6 +106,26 @@ export interface MatchUiResponse {
   error?: string;
 }
 
+export interface GameEngineSummary {
+  id: string;
+  name: string;
+  minPlayers: number;
+  maxPlayers: number;
+  actionSchema?: unknown;
+}
+
+export interface GameDetail extends GameEngineSummary {
+  description: string;
+  rules: string[];
+  instructions: string[];
+  prizePoolModel: string;
+  rulebookStatus: string;
+  rulebookHash?: string;
+  rulebookSource: "backend-live-match" | "pending-live-match" | "not-exposed-by-backend";
+  activeMatchCount: number;
+  activeMatches: MatchSummary[];
+}
+
 export interface MatchSummary {
   matchId: string;
   gameId: string;
@@ -126,6 +146,46 @@ export async function getHealth(): Promise<{ ok: boolean }> {
 
 export async function getLiveMatches(): Promise<MatchSummary[]> {
   return request("/matches/live");
+}
+
+export async function getGames(): Promise<GameEngineSummary[]> {
+  return request("/games");
+}
+
+export async function getGameDetail(gameId: string): Promise<GameDetail> {
+  const [games, liveMatches] = await Promise.all([getGames(), getLiveMatches()]);
+  const game = games.find((candidate) => candidate.id === gameId);
+  if (!game) {
+    throw new Error(`Unknown game: ${gameId}`);
+  }
+  const activeMatches = liveMatches.filter((match) => match.gameId === gameId);
+  let rulebookHash: string | undefined;
+  if (activeMatches[0]) {
+    try {
+      const ui = await getMatchUi(activeMatches[0].matchId);
+      rulebookHash = ui.receipt?.rulesHash ?? ui.render.data.rulesHash;
+    } catch {
+      rulebookHash = undefined;
+    }
+  }
+  const catalog = gameCatalog[game.id] ?? defaultGameCatalog(game);
+  return {
+    ...game,
+    ...catalog,
+    rulebookHash,
+    rulebookStatus: rulebookHash
+      ? "live rulebook hash exposed by backend"
+      : activeMatches.length > 0
+        ? "pending from live match backend payload"
+        : "not exposed by backend until a match exists",
+    rulebookSource: rulebookHash
+      ? "backend-live-match"
+      : activeMatches.length > 0
+        ? "pending-live-match"
+        : "not-exposed-by-backend",
+    activeMatchCount: activeMatches.length,
+    activeMatches,
+  };
 }
 
 export async function createDemoMatch(): Promise<DemoMatchResponse> {
@@ -162,4 +222,39 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     throw new Error(message);
   }
   return data as T;
+}
+
+const gameCatalog: Record<
+  string,
+  Pick<GameDetail, "description" | "rules" | "instructions" | "prizePoolModel">
+> = {
+  "sovereign-bluff": {
+    description:
+      "Two wallet-backed agents negotiate, bluff, and bid across five treasury rounds.",
+    rules: [
+      "Two players start with 100 tokens.",
+      "Each round has broadcast and bid phases.",
+      "Bids stay hidden until both agents submit.",
+      "Highest bid wins the treasury; tied bids split it.",
+      "After five rounds, the highest final balance wins.",
+    ],
+    instructions: [
+      "Open an active match to watch backend state update live.",
+      "Broadcast text and bids come from the backend render payload.",
+      "Archive, funding, rulebook, and payout evidence stay pending until returned by the backend.",
+    ],
+    prizePoolModel:
+      "Both agent wallets fund the configured PrizePool stake before play. After archival, the backend submits winner payout through the deployed contract.",
+  },
+};
+
+function defaultGameCatalog(
+  game: GameEngineSummary,
+): Pick<GameDetail, "description" | "rules" | "instructions" | "prizePoolModel"> {
+  return {
+    description: `${game.name} is available from the backend game registry.`,
+    rules: ["Rules are not exposed by the current backend /games payload."],
+    instructions: ["Open an active match to inspect live backend-rendered state."],
+    prizePoolModel: "Prize pool details are exposed per match when the backend provides them.",
+  };
 }

@@ -2,8 +2,8 @@
   color-scheme: dark;
   font-family:
     Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  background: #050809;
-  color: #e4fff8;
+  background: #050708;
+  color: #ecfff9;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
@@ -18,183 +18,222 @@ body {
   min-width: 320px;
   min-height: 100vh;
   background:
-    linear-gradient(180deg, rgba(5, 19, 20, 0.92), rgba(5, 8, 9, 1)),
-    #050809;
+    linear-gradient(180deg, rgba(2, 12, 13, 0.96), rgba(5, 7, 8, 1)),
+    #050708;
 }
 
 button {
   font: inherit;
 }
 
-.shell {
+.platform-shell,
+.game-shell {
   width: min(1440px, calc(100vw - 32px));
   margin: 0 auto;
-  padding: 24px 0 32px;
 }
 
-.home-grid,
-.viewer-grid {
+.platform-shell {
+  padding: 24px 0 36px;
+}
+
+.game-shell {
+  width: min(1680px, calc(100vw - 24px));
+  padding: 12px 0 32px;
+}
+
+.landing {
+  display: grid;
+  min-height: calc(100vh - 48px);
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 400px);
+  gap: 20px;
+  align-items: stretch;
+}
+
+.landing-hero {
+  display: grid;
+  align-content: center;
+  min-height: 620px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 215, 104, 0.34);
+  border-radius: 8px;
+  background:
+    linear-gradient(180deg, rgba(18, 8, 28, 0.34), rgba(4, 10, 12, 0.92)),
+    repeating-linear-gradient(90deg, rgba(51, 255, 209, 0.08) 0 2px, transparent 2px 22px),
+    radial-gradient(circle at 52% 58%, rgba(255, 215, 104, 0.2), transparent 28%),
+    #071013;
+  padding: clamp(24px, 5vw, 72px);
+}
+
+.landing-hero h1 {
+  margin: 8px 0 12px;
+  color: #ffffff;
+  font-size: clamp(58px, 11vw, 150px);
+  line-height: 0.9;
+  letter-spacing: 0;
+  text-shadow: 6px 6px 0 #130817;
+}
+
+.landing-hero p {
+  max-width: 760px;
+  color: #b9ccc8;
+  font-size: 18px;
+  line-height: 1.55;
+}
+
+.ticker-strip {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  border: 1px solid rgba(71, 255, 211, 0.2);
+  border-radius: 8px;
+  background: #071113;
+  padding: 14px;
+}
+
+.ticker-strip > div,
+.ticker-strip button {
+  border: 1px solid rgba(132, 153, 147, 0.2);
+  border-radius: 6px;
+  background: #0a1719;
+  color: #ecfff9;
+  padding: 12px;
+  text-align: left;
+}
+
+.ticker-strip button {
+  display: grid;
+  gap: 4px;
+  cursor: pointer;
+}
+
+.ticker-strip small,
+.agent-card small,
+.phase-ribbon small,
+.treasury-pot small,
+.funding-row small {
+  color: #91a7a2;
+}
+
+.signal {
+  display: inline-block;
+  width: 10px;
+  aspect-ratio: 1;
+  margin-right: 8px;
+  border-radius: 50%;
+  background: #f0d86a;
+}
+
+.signal.online {
+  background: #38ffc8;
+}
+
+.platform-page,
+.live-game-page {
   display: grid;
   gap: 16px;
 }
 
-.home-grid {
-  grid-template-columns: minmax(0, 1.4fr) minmax(280px, 0.6fr);
-  align-items: start;
+.platform-header,
+.game-nav,
+.agent-top {
+  display: flex;
+  gap: 12px;
 }
 
-.live-panel {
-  grid-column: 1 / -1;
+.platform-header {
+  align-items: end;
+  justify-content: space-between;
+  border-bottom: 1px solid rgba(71, 255, 211, 0.22);
+  padding-bottom: 16px;
 }
 
-.panel {
-  border: 1px solid rgba(71, 255, 211, 0.2);
-  border-radius: 8px;
-  background: rgba(7, 18, 19, 0.92);
-  box-shadow: 0 0 0 1px rgba(13, 47, 43, 0.7) inset;
-  padding: 16px;
-}
-
-.hero-panel h1,
-.match-header h1 {
-  margin: 6px 0 8px;
-  font-size: clamp(28px, 4vw, 52px);
-  line-height: 1;
+.platform-header h1 {
+  margin: 6px 0 0;
+  font-size: clamp(34px, 5vw, 68px);
+  line-height: 0.95;
   letter-spacing: 0;
-}
-
-h2 {
-  margin: 0 0 14px;
-  font-size: 16px;
-  letter-spacing: 0;
-}
-
-h3 {
-  margin: 0 0 10px;
-  font-size: 13px;
-  color: #9afce4;
-  letter-spacing: 0;
-  text-transform: uppercase;
 }
 
 .eyebrow {
   color: #33ffd1;
   font-size: 12px;
-  font-weight: 800;
+  font-weight: 900;
   letter-spacing: 0;
   text-transform: uppercase;
 }
 
-.muted {
-  color: #93aaa5;
-  max-width: 780px;
-}
-
-.action-row,
-.agent-top,
-.match-header,
-.header-stats {
-  display: flex;
-  gap: 12px;
-}
-
-.action-row {
-  flex-wrap: wrap;
-  margin-top: 22px;
-}
-
 .primary,
-.secondary,
-.back-button,
-.match-button,
-.match-button button,
-.open-game-button {
+.secondary {
+  min-height: 44px;
   border: 1px solid rgba(48, 255, 208, 0.38);
   border-radius: 6px;
-  color: #e4fff8;
   cursor: pointer;
+  font-weight: 800;
+  padding: 10px 14px;
 }
 
 .primary {
   background: #00bf8f;
   color: #001211;
-  font-weight: 800;
-  padding: 12px 16px;
 }
 
-.secondary,
-.back-button {
+.secondary {
   background: #0b1d1f;
-  padding: 12px 16px;
+  color: #ecfff9;
 }
 
-.primary:disabled {
+.primary:disabled,
+.secondary:disabled {
   cursor: not-allowed;
   opacity: 0.55;
 }
 
-.match-list {
+.game-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 14px;
 }
 
-.match-button {
+.game-card,
+.info-panel,
+.active-match-card,
+.game-side,
+.game-wide {
+  border: 1px solid rgba(71, 255, 211, 0.2);
   border-radius: 8px;
-  background: #091417;
-  padding: 8px;
+  background: rgba(7, 18, 19, 0.94);
+  box-shadow: 0 0 0 1px rgba(13, 47, 43, 0.7) inset;
 }
 
-.match-button button {
+.game-card {
   display: grid;
-  gap: 6px;
-  width: 100%;
-  min-height: 82px;
-  padding: 12px;
-  text-align: left;
-  background: #091417;
+  gap: 18px;
+  padding: 18px;
 }
 
-.open-game-button {
-  display: block;
-  width: 100%;
-  min-height: 40px;
-  margin-top: 8px;
-  background: #1d1525;
-  color: #ffd57a;
-  text-align: center;
+.game-card h2,
+.info-panel h2,
+.match-section h2,
+.game-side h2,
+.game-wide h2 {
+  margin: 0 0 12px;
+  font-size: 18px;
+  letter-spacing: 0;
 }
 
-.match-button span,
-.mono,
-code {
-  overflow-wrap: anywhere;
-  font-family: "Cascadia Mono", "SFMono-Regular", Consolas, monospace;
+.game-card p,
+.info-panel p,
+.detail-band p {
+  color: #b9ccc8;
+  line-height: 1.5;
 }
 
-.match-button strong {
-  color: #33ffd1;
-}
-
-.match-button small {
-  color: #8da49f;
-}
-
-.match-page {
-  display: grid;
-  gap: 16px;
-}
-
-.match-header {
-  justify-content: space-between;
-  align-items: end;
-  border-bottom: 1px solid rgba(71, 255, 211, 0.22);
-  padding-bottom: 16px;
-}
-
-.header-stats {
+.game-facts,
+.match-meta-row,
+.detail-actions {
+  display: flex;
   flex-wrap: wrap;
-  justify-content: flex-end;
+  gap: 10px;
 }
 
 .metric {
@@ -217,20 +256,74 @@ code {
 .evidence-row strong {
   display: block;
   margin-top: 4px;
-  color: #e4fff8;
+  color: #ecfff9;
   overflow-wrap: anywhere;
 }
 
-.viewer-grid {
-  grid-template-columns: minmax(320px, 0.9fr) minmax(360px, 1.1fr) minmax(320px, 0.9fr);
+.detail-band {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 440px);
+  gap: 16px;
   align-items: start;
+  border-bottom: 1px solid rgba(132, 153, 147, 0.18);
+  padding-bottom: 16px;
+}
+
+.info-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.info-panel {
+  padding: 16px;
+}
+
+.info-panel ul {
+  margin: 0;
+  padding-left: 18px;
+  color: #b9ccc8;
+}
+
+.info-panel li + li {
+  margin-top: 8px;
+}
+
+.active-match-list {
+  display: grid;
+  gap: 10px;
+}
+
+.active-match-card {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) minmax(320px, 1.1fr) auto;
+  gap: 12px;
+  align-items: center;
+  padding: 14px;
+}
+
+.active-match-card strong,
+.active-match-card span {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+.game-nav {
+  align-items: center;
+  justify-content: space-between;
+  color: #b9ccc8;
+}
+
+.game-nav span {
+  overflow-wrap: anywhere;
+  font-family: "Cascadia Mono", "SFMono-Regular", Consolas, monospace;
 }
 
 .arena-stage {
   position: relative;
   overflow: hidden;
-  min-height: 560px;
-  border: 1px solid rgba(255, 213, 122, 0.35);
+  min-height: calc(100vh - 92px);
+  border: 1px solid rgba(255, 213, 122, 0.38);
   border-radius: 8px;
   background:
     linear-gradient(180deg, rgba(49, 18, 65, 0.92), rgba(9, 14, 18, 0.96)),
@@ -277,7 +370,8 @@ code {
 .stage-title strong {
   display: block;
   margin-top: 4px;
-  font-size: 28px;
+  font-size: clamp(26px, 4vw, 54px);
+  line-height: 1;
 }
 
 .phase-ribbon {
@@ -290,16 +384,12 @@ code {
   animation: phasePulse 1.4s ease-in-out infinite;
 }
 
-.phase-ribbon small {
-  color: #c4b9d0;
-}
-
 .duel-layout {
   display: grid;
-  grid-template-columns: minmax(220px, 1fr) minmax(180px, 0.7fr) minmax(220px, 1fr);
+  grid-template-columns: minmax(220px, 1fr) minmax(180px, 0.62fr) minmax(220px, 1fr);
   gap: 18px;
   align-items: center;
-  min-height: 420px;
+  min-height: calc(100vh - 260px);
 }
 
 .duelist {
@@ -317,7 +407,7 @@ code {
 .avatar {
   display: grid;
   place-items: center;
-  width: min(28vw, 150px);
+  width: min(28vw, 158px);
   aspect-ratio: 1;
   border: 3px solid rgba(51, 255, 209, 0.62);
   border-radius: 8px;
@@ -339,6 +429,13 @@ code {
   margin: 0;
   font-size: 24px;
   text-align: center;
+}
+
+.duelist code,
+.mono,
+code {
+  overflow-wrap: anywhere;
+  font-family: "Cascadia Mono", "SFMono-Regular", Consolas, monospace;
 }
 
 .duelist code {
@@ -447,7 +544,6 @@ code {
 .winner-banner,
 .round-result {
   max-width: 180px;
-  color: #e4fff8;
 }
 
 .round-timeline {
@@ -478,14 +574,29 @@ code {
   animation: phasePulse 1.4s ease-in-out infinite;
 }
 
-.receipt-panel,
-.history-panel {
-  grid-column: span 3;
+.game-evidence-layout {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
 }
 
-.agent-grid {
+.game-side,
+.game-wide {
+  padding: 16px;
+}
+
+.agent-grid,
+.evidence-grid,
+.receipt-grid,
+.tx-list,
+.broadcasts,
+.bid-grid {
   display: grid;
-  gap: 12px;
+  gap: 10px;
+}
+
+.evidence-grid.compact {
+  align-content: start;
 }
 
 .agent-card {
@@ -506,23 +617,18 @@ code {
 }
 
 .agent-card h3 {
-  margin-bottom: 2px;
-  color: #e4fff8;
-  text-transform: none;
+  margin: 0 0 2px;
+  color: #ecfff9;
   font-size: 18px;
-}
-
-.agent-card small {
-  color: #8da49f;
 }
 
 .pill {
   display: inline-flex;
   align-items: center;
   min-height: 26px;
+  border: 1px solid currentColor;
   border-radius: 999px;
   padding: 4px 8px;
-  border: 1px solid currentColor;
   font-size: 12px;
   white-space: nowrap;
 }
@@ -537,12 +643,6 @@ code {
 
 .bad {
   color: #ff7d7d;
-}
-
-.evidence-grid,
-.receipt-grid {
-  display: grid;
-  gap: 10px;
 }
 
 .evidence-row {
@@ -577,12 +677,6 @@ code {
   overflow-wrap: anywhere;
 }
 
-.tx-list {
-  display: grid;
-  gap: 8px;
-  margin-top: 4px;
-}
-
 .funding-row,
 .summary-row {
   display: grid;
@@ -598,15 +692,6 @@ code {
 .funding-row small,
 .summary-row code {
   grid-column: 1 / -1;
-  color: #8da49f;
-  overflow-wrap: anywhere;
-}
-
-.broadcasts,
-.bid-grid {
-  display: grid;
-  gap: 10px;
-  margin-bottom: 16px;
 }
 
 .bubble {
@@ -618,7 +703,6 @@ code {
 
 .bubble p {
   margin: 6px 0;
-  color: #e4fff8;
 }
 
 .bubble small {
@@ -710,29 +794,13 @@ code {
   }
 }
 
-@media (max-width: 1080px) {
-  .home-grid,
-  .viewer-grid {
+@media (max-width: 1120px) {
+  .landing,
+  .detail-band,
+  .info-grid,
+  .game-evidence-layout,
+  .active-match-card {
     grid-template-columns: 1fr;
-  }
-
-  .receipt-panel,
-  .history-panel,
-  .live-panel {
-    grid-column: auto;
-  }
-
-  .match-header {
-    align-items: stretch;
-    flex-direction: column;
-  }
-
-  .header-stats {
-    justify-content: stretch;
-  }
-
-  .metric {
-    flex: 1 1 140px;
   }
 
   .arena-stage {
@@ -753,23 +821,24 @@ code {
 }
 
 @media (max-width: 640px) {
-  .shell {
+  .platform-shell,
+  .game-shell {
     width: min(100vw - 20px, 1440px);
-    padding-top: 12px;
   }
 
-  .panel {
-    padding: 12px;
+  .landing-hero {
+    min-height: 520px;
+    padding: 20px;
   }
 
-  .funding-row,
-  .summary-row,
-  .bid-card {
-    grid-template-columns: 1fr;
-    flex-direction: column;
+  .landing-hero h1 {
+    font-size: 58px;
   }
 
+  .platform-header,
+  .game-nav,
   .stage-skyline {
+    align-items: stretch;
     flex-direction: column;
   }
 
@@ -778,11 +847,14 @@ code {
     text-align: left;
   }
 
-  .stage-title strong {
-    font-size: 22px;
-  }
-
   .avatar {
     width: 132px;
+  }
+
+  .funding-row,
+  .summary-row,
+  .bid-card {
+    grid-template-columns: 1fr;
+    flex-direction: column;
   }
 }

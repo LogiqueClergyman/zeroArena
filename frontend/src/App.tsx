@@ -1,12 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   createDemoMatch,
+  getGameDetail,
+  getGames,
   getHealth,
   getLiveMatches,
   getMatchUi,
   startDemoAgents,
   type AgentLog,
   type FundingTxReceipt,
+  type GameDetail,
+  type GameEngineSummary,
   type MatchReceipt,
   type MatchSummary,
   type MatchUiResponse,
@@ -14,7 +18,11 @@ import {
   type RoundSummary,
 } from "./api";
 
-type Route = { name: "home" } | { name: "match"; id: string };
+type Route =
+  | { name: "landing" }
+  | { name: "games" }
+  | { name: "gameDetail"; id: string }
+  | { name: "liveGame"; id: string };
 
 export default function App() {
   const [route, setRoute] = useState<Route>(() => parseRoute());
@@ -31,50 +39,177 @@ export default function App() {
   };
 
   return (
-    <main className="shell">
-      {route.name === "home" ? (
-        <HomeScreen navigate={navigate} />
-      ) : (
-        <MatchViewer matchId={route.id} navigate={navigate} />
-      )}
+    <main className={route.name === "liveGame" ? "game-shell" : "platform-shell"}>
+      {route.name === "landing" ? <LandingPage navigate={navigate} /> : null}
+      {route.name === "games" ? <Marketplace navigate={navigate} /> : null}
+      {route.name === "gameDetail" ? <GameDetailPage gameId={route.id} navigate={navigate} /> : null}
+      {route.name === "liveGame" ? <LiveGamePage matchId={route.id} navigate={navigate} /> : null}
     </main>
   );
 }
 
-function HomeScreen({ navigate }: { navigate: (to: string) => void }) {
+function LandingPage({ navigate }: { navigate: (to: string) => void }) {
   const [health, setHealth] = useState<"checking" | "online" | "offline">("checking");
   const [liveMatches, setLiveMatches] = useState<MatchSummary[]>([]);
+  const [error, setError] = useState<string>();
+
+  useEffect(() => {
+    let stopped = false;
+    const refresh = async () => {
+      try {
+        await getHealth();
+        const matches = await getLiveMatches();
+        if (!stopped) {
+          setHealth("online");
+          setLiveMatches(matches);
+          setError(undefined);
+        }
+      } catch (err) {
+        if (!stopped) {
+          setHealth("offline");
+          setLiveMatches([]);
+          setError(errorMessage(err));
+        }
+      }
+    };
+    void refresh();
+    const timer = window.setInterval(refresh, 3000);
+    return () => {
+      stopped = true;
+      window.clearInterval(timer);
+    };
+  }, []);
+
+  return (
+    <section className="landing">
+      <div className="landing-hero">
+        <div className="eyebrow">Trusted-referee MVP</div>
+        <h1>ZeroArena</h1>
+        <p>
+          Autonomous agents compete in Sovereign Bluff with backend-rendered match state, rulebook
+          commitment, 0G archive evidence, and contract payout fields shown only when returned.
+        </p>
+        <button className="primary" onClick={() => navigate("/games")}>
+          Enter Marketplace
+        </button>
+      </div>
+
+      <aside className="ticker-strip" aria-label="Live match preview">
+        <div>
+          <span className={health === "online" ? "signal online" : "signal"} />
+          Backend {health}
+        </div>
+        {error ? <strong>{error}</strong> : null}
+        {liveMatches.length === 0 && !error ? <strong>No live matches reported.</strong> : null}
+        {liveMatches.slice(0, 3).map((match) => (
+          <button key={match.matchId} onClick={() => navigate(`/game/${match.matchId}`)}>
+            <span>{match.gameId}</span>
+            <strong>{match.status}</strong>
+            <small>
+              {match.matchId} / round {match.round}
+            </small>
+          </button>
+        ))}
+      </aside>
+    </section>
+  );
+}
+
+function Marketplace({ navigate }: { navigate: (to: string) => void }) {
+  const [games, setGames] = useState<GameEngineSummary[]>([]);
+  const [liveMatches, setLiveMatches] = useState<MatchSummary[]>([]);
+  const [error, setError] = useState<string>();
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let stopped = false;
+    const refresh = async () => {
+      try {
+        const [nextGames, nextMatches] = await Promise.all([getGames(), getLiveMatches()]);
+        if (!stopped) {
+          setGames(nextGames);
+          setLiveMatches(nextMatches);
+          setError(undefined);
+          setLoading(false);
+        }
+      } catch (err) {
+        if (!stopped) {
+          setError(errorMessage(err));
+          setLoading(false);
+        }
+      }
+    };
+    void refresh();
+    const timer = window.setInterval(refresh, 4000);
+    return () => {
+      stopped = true;
+      window.clearInterval(timer);
+    };
+  }, []);
+
+  return (
+    <section className="platform-page">
+      <PlatformHeader
+        eyebrow="Game marketplace"
+        title="Available arenas"
+        action={<button className="secondary" onClick={() => navigate("/")}>Back</button>}
+      />
+      {error ? <StatusBanner tone="bad" label="Backend error" value={error} /> : null}
+      {loading ? <StatusBanner tone="warn" label="Loading" value="Reading /games and /matches/live." /> : null}
+      <div className="game-grid">
+        {games.map((game) => {
+          const matches = liveMatches.filter((match) => match.gameId === game.id);
+          return (
+            <article className="game-card" key={game.id}>
+              <div>
+                <span className="eyebrow">Deployed game</span>
+                <h2>{game.name}</h2>
+                <p>{gameDescription(game.id, game.name)}</p>
+              </div>
+              <div className="game-facts">
+                <Metric label="Players" value={`${game.minPlayers}-${game.maxPlayers}`} />
+                <Metric label="Active matches" value={String(matches.length)} />
+                <Metric label="Rulebook" value={matches.length ? "check live match" : "pending live match"} />
+              </div>
+              <button className="primary" onClick={() => navigate(`/games/${game.id}`)}>
+                View Game
+              </button>
+            </article>
+          );
+        })}
+      </div>
+      {games.length === 0 && !loading ? <EmptyState text="No games returned by /games." /> : null}
+    </section>
+  );
+}
+
+function GameDetailPage({ gameId, navigate }: { gameId: string; navigate: (to: string) => void }) {
+  const [detail, setDetail] = useState<GameDetail>();
   const [error, setError] = useState<string>();
   const [starting, setStarting] = useState(false);
 
   const refresh = async () => {
-    setError(undefined);
     try {
-      await getHealth();
-      setHealth("online");
-      setLiveMatches(await getLiveMatches());
+      setDetail(await getGameDetail(gameId));
+      setError(undefined);
     } catch (err) {
-      setHealth("offline");
       setError(errorMessage(err));
-      setLiveMatches([]);
     }
   };
 
   useEffect(() => {
     void refresh();
-    const timer = window.setInterval(() => void refresh(), 3000);
+    const timer = window.setInterval(() => void refresh(), 4000);
     return () => window.clearInterval(timer);
-  }, []);
+  }, [gameId]);
 
-  const start = async () => {
+  const startDemo = async () => {
     setStarting(true);
-    setError(undefined);
     try {
       const match = await createDemoMatch();
-      void startDemoAgents(match.matchId).catch((err) => {
-        setError(`Demo agent runner failed: ${errorMessage(err)}`);
-      });
-      navigate(`/match/${match.matchId}`);
+      void startDemoAgents(match.matchId).catch((err) => setError(`Demo agent runner failed: ${errorMessage(err)}`));
+      window.open(`/game/${match.matchId}`, "_blank", "noopener,noreferrer");
+      await refresh();
     } catch (err) {
       setError(errorMessage(err));
     } finally {
@@ -83,82 +218,90 @@ function HomeScreen({ navigate }: { navigate: (to: string) => void }) {
   };
 
   return (
-    <section className="home-grid">
-      <div className="panel hero-panel">
-        <div className="eyebrow">ZeroArena MVP</div>
-        <h1>Live Sovereign Bluff Control</h1>
-        <p className="muted">
-          Start or open a backend-driven demo match. The browser renders only API state and labels
-          mock or missing evidence explicitly.
-        </p>
-        <div className="action-row">
-          <button className="primary" onClick={start} disabled={starting || health === "offline"}>
-            {starting ? "Creating match..." : "Start demo match"}
-          </button>
-          <button className="secondary" onClick={() => void refresh()}>
-            Refresh status
-          </button>
-        </div>
-        {error ? <StatusBanner tone="bad" label="Backend error" value={error} /> : null}
-      </div>
-
-      <div className="panel status-panel">
-        <h2>Backend Status</h2>
-        <EvidenceRow label="Health" value={health} tone={health === "online" ? "good" : "warn"} />
-        <EvidenceRow label="Endpoint" value={import.meta.env.VITE_BACKEND_URL || "/api proxy"} />
-        <EvidenceRow label="Live matches" value={String(liveMatches.length)} />
-      </div>
-
-      <div className="panel live-panel">
-        <h2>Open Matches</h2>
-        {liveMatches.length === 0 ? (
-          <EmptyState text="No live match reported by the backend." />
-        ) : (
-          <div className="match-list">
-            {liveMatches.map((match) => (
-              <div key={match.matchId} className="match-button">
-                <button onClick={() => navigate(`/match/${match.matchId}`)}>
-                  <span>{match.matchId}</span>
-                  <strong>{match.status}</strong>
-                  <small>
-                    Round {match.round} / {match.gameId}
-                  </small>
-                </button>
-                <button
-                  className="open-game-button"
-                  onClick={() => window.open(`/match/${match.matchId}`, "_blank", "noopener,noreferrer")}
-                >
-                  Open live game
+    <section className="platform-page">
+      <PlatformHeader
+        eyebrow="Game detail"
+        title={detail?.name ?? gameId}
+        action={<button className="secondary" onClick={() => navigate("/games")}>Marketplace</button>}
+      />
+      {error ? <StatusBanner tone="bad" label="Backend error" value={error} /> : null}
+      {!detail ? <StatusBanner tone="warn" label="Loading" value="Reading game detail from backend and catalog adapter." /> : null}
+      {detail ? (
+        <>
+          <section className="detail-band">
+            <div>
+              <p>{detail.description}</p>
+              <div className="detail-actions">
+                <button className="secondary" onClick={startDemo} disabled={starting}>
+                  {starting ? "Creating..." : "Start Demo Match"}
                 </button>
               </div>
-            ))}
-          </div>
-        )}
-      </div>
+            </div>
+            <div className="evidence-grid compact">
+              <EvidenceRow label="Player count" value={`${detail.minPlayers}-${detail.maxPlayers}`} />
+              <EvidenceRow label="Active matches" value={String(detail.activeMatchCount)} />
+              <EvidenceRow label="Rulebook status" value={detail.rulebookStatus} tone={detail.rulebookHash ? "good" : "warn"} />
+              <EvidenceRow label="Rulebook hash" value={detail.rulebookHash ?? "not exposed by backend"} mono tone={detail.rulebookHash ? "good" : "warn"} />
+            </div>
+          </section>
+
+          <section className="info-grid">
+            <InfoList title="Rules" items={detail.rules} />
+            <InfoList title="Instructions" items={detail.instructions} />
+            <article className="info-panel">
+              <h2>Prize Pool Model</h2>
+              <p>{detail.prizePoolModel}</p>
+            </article>
+          </section>
+
+          <section className="match-section">
+            <h2>Active Matches</h2>
+            {detail.activeMatches.length === 0 ? <EmptyState text="No active/running matches for this game." /> : null}
+            <div className="active-match-list">
+              {detail.activeMatches.map((match) => (
+                <ActiveMatchCard key={match.matchId} match={match} />
+              ))}
+            </div>
+          </section>
+        </>
+      ) : null}
     </section>
   );
 }
 
-function MatchViewer({ matchId, navigate }: { matchId: string; navigate: (to: string) => void }) {
+function ActiveMatchCard({ match }: { match: MatchSummary }) {
+  return (
+    <article className="active-match-card">
+      <div>
+        <strong>{match.matchId}</strong>
+        <span>
+          {match.players.map((player) => player.name || player.id).join(" vs ") || "players pending"}
+        </span>
+      </div>
+      <div className="match-meta-row">
+        <Metric label="Round" value={String(match.round)} />
+        <Metric label="Status" value={match.status} />
+        <Metric label="Funding/archive/payout" value="open live backend view" />
+      </div>
+      <button
+        className="primary"
+        onClick={() => window.open(`/game/${match.matchId}`, "_blank", "noopener,noreferrer")}
+      >
+        Open Live Game
+      </button>
+    </article>
+  );
+}
+
+function LiveGamePage({ matchId, navigate }: { matchId: string; navigate: (to: string) => void }) {
   const [ui, setUi] = useState<MatchUiResponse>();
   const [error, setError] = useState<string>();
   const [loading, setLoading] = useState(true);
-  const startedRef = useRef(false);
   const stableReceiptRef = useRef({ value: "", count: 0 });
-
-  useEffect(() => {
-    if (!startedRef.current) {
-      startedRef.current = true;
-      void startDemoAgents(matchId).catch((err) => {
-        setError(`Demo agent runner failed: ${errorMessage(err)}`);
-      });
-    }
-  }, [matchId]);
 
   useEffect(() => {
     let stopped = false;
     let timer: number | undefined;
-
     const poll = async () => {
       try {
         const next = await getMatchUi(matchId);
@@ -168,11 +311,9 @@ function MatchViewer({ matchId, navigate }: { matchId: string; navigate: (to: st
         setUi(next);
         setError(undefined);
         setLoading(false);
-
-        if (shouldStopPolling(next, stableReceiptRef.current)) {
-          return;
+        if (!shouldStopPolling(next, stableReceiptRef.current)) {
+          timer = window.setTimeout(poll, 1000);
         }
-        timer = window.setTimeout(poll, 1000);
       } catch (err) {
         if (!stopped) {
           setError(errorMessage(err));
@@ -181,7 +322,6 @@ function MatchViewer({ matchId, navigate }: { matchId: string; navigate: (to: st
         }
       }
     };
-
     void poll();
     return () => {
       stopped = true;
@@ -194,79 +334,51 @@ function MatchViewer({ matchId, navigate }: { matchId: string; navigate: (to: st
   const data = ui?.render.data;
   const players = data?.players ?? [];
   const receipt = ui?.receipt;
-  const latestLogs = useMemo(() => latestLogByPlayer(ui?.agentLogs ?? []), [ui?.agentLogs]);
   const winner = receipt?.winner ?? data?.winner;
+  const latestLogs = useMemo(() => latestLogByPlayer(ui?.agentLogs ?? []), [ui?.agentLogs]);
 
   return (
-    <section className="match-page">
-      <header className="match-header">
-        <div>
-          <button className="back-button" onClick={() => navigate("/")}>
-            Back
-          </button>
-          <div className="eyebrow">Match Viewer</div>
-          <h1>{matchId}</h1>
-        </div>
-        <div className="header-stats">
-          <Metric label="Status" value={ui?.status ?? (loading ? "loading" : "pending")} />
-          <Metric label="Round" value={`${data?.round ?? "-"} / ${data?.totalRounds ?? "-"}`} />
-          <Metric label="Treasury" value={formatMaybe(data?.currentTreasury)} />
-          <Metric label="Phase" value={data?.phase ?? "pending"} />
-        </div>
-      </header>
-
+    <section className="live-game-page">
+      <nav className="game-nav">
+        <button className="secondary" onClick={() => navigate("/games/sovereign-bluff")}>Game Detail</button>
+        <span>{matchId}</span>
+        <strong>{ui?.status ?? (loading ? "loading" : "pending")}</strong>
+      </nav>
       {error ? <StatusBanner tone="bad" label="Polling error" value={error} /> : null}
       {ui?.runnerError ? <StatusBanner tone="bad" label="Agent runner error" value={ui.runnerError} /> : null}
       {loading ? <StatusBanner tone="warn" label="Loading" value="Waiting for /match/:id/ui." /> : null}
 
-      <SovereignBluffStage
-        data={data}
-        players={players}
-        winner={winner}
-        status={ui?.status ?? "waiting"}
-      />
+      <SovereignBluffStage data={data} players={players} winner={winner} status={ui?.status ?? "waiting"} />
 
-      <div className="viewer-grid">
-        <section className="panel agents-panel">
+      <section className="game-evidence-layout">
+        <div className="game-side">
           <h2>Agents</h2>
           <div className="agent-grid">
             {players.length === 0 ? <EmptyState text="Agent data pending from backend." /> : null}
             {players.map((player) => (
-              <AgentCard
-                key={player.id}
-                player={player}
-                latestLog={latestLogs.get(player.id)}
-                winner={winner === player.id}
-              />
+              <AgentCard key={player.id} player={player} latestLog={latestLogs.get(player.id)} winner={winner === player.id} />
             ))}
           </div>
-        </section>
-
-        <section className="panel prize-panel">
-          <h2>Prize Pool And 0G Evidence</h2>
-          <PrizePoolEvidence ui={ui} receipt={receipt} />
-        </section>
-
-        <section className="panel board-panel">
-          <h2>Live Round</h2>
+        </div>
+        <div className="game-side">
+          <h2>Current Round</h2>
           <Broadcasts messages={data?.messages ?? []} players={players} />
-          <BidStatus
-            pendingBids={data?.pendingBids ?? []}
-            revealedBids={data?.revealedBids ?? []}
-            players={players}
-          />
-        </section>
+          <BidStatus pendingBids={data?.pendingBids ?? []} revealedBids={data?.revealedBids ?? []} players={players} />
+        </div>
+        <div className="game-side">
+          <h2>0G And Payout Evidence</h2>
+          <PrizePoolEvidence ui={ui} receipt={receipt} />
+        </div>
+      </section>
 
-        <section className="panel history-panel">
-          <h2>Round History</h2>
-          <RoundHistory history={data?.history ?? []} players={players} />
-        </section>
-
-        <section className="panel receipt-panel">
-          <h2>Final Receipt</h2>
-          <FinalReceipt receipt={receipt} winner={winner} status={ui?.status} />
-        </section>
-      </div>
+      <section className="game-wide">
+        <h2>Round History</h2>
+        <RoundHistory history={data?.history ?? []} players={players} />
+      </section>
+      <section className="game-wide">
+        <h2>Final Receipt</h2>
+        <FinalReceipt receipt={receipt} winner={winner} status={ui?.status} />
+      </section>
     </section>
   );
 }
@@ -294,11 +406,13 @@ function SovereignBluffStage({
       <div className="stage-skyline">
         <div className="stage-title">
           <span>Sovereign Bluff</span>
-          <strong>Round {formatMaybe(data?.round)} of {formatMaybe(data?.totalRounds ?? 5)}</strong>
+          <strong>
+            Round {formatMaybe(data?.round)} of {formatMaybe(data?.totalRounds ?? 5)}
+          </strong>
         </div>
         <div className="phase-ribbon">
           <span>{phase}</span>
-          <small>broadcast then bid, 5 rounds</small>
+          <small>{status}</small>
         </div>
       </div>
 
@@ -427,21 +541,17 @@ function RoundTimeline({ total, current, history }: { total: number; current: nu
       {Array.from({ length: total }, (_, index) => {
         const round = index + 1;
         const done = history.some((item) => item.round === round);
-        return <span key={round} className={done ? "done" : round === current ? "active" : ""}>{round}</span>;
+        return (
+          <span key={round} className={done ? "done" : round === current ? "active" : ""}>
+            {round}
+          </span>
+        );
       })}
     </div>
   );
 }
 
-function AgentCard({
-  player,
-  latestLog,
-  winner,
-}: {
-  player: Player;
-  latestLog?: AgentLog;
-  winner: boolean;
-}) {
+function AgentCard({ player, latestLog, winner }: { player: Player; latestLog?: AgentLog; winner: boolean }) {
   const mode = latestLog?.inferenceMode ?? player.inferenceMode ?? player.agentKind ?? "pending";
   return (
     <article className={`agent-card ${winner ? "winner" : ""}`}>
@@ -457,9 +567,7 @@ function AgentCard({
       <EvidenceRow label="Provider" value={latestLog?.provider ?? "pending"} />
       <EvidenceRow label="Model" value={latestLog?.model ?? "pending"} />
       <EvidenceRow label="Last latency" value={latestLog ? `${latestLog.latencyMs} ms` : "pending"} />
-      {latestLog?.fallbackReason ? (
-        <StatusBanner tone="warn" label="Fallback" value={latestLog.fallbackReason} />
-      ) : null}
+      {latestLog?.fallbackReason ? <StatusBanner tone="warn" label="Fallback" value={latestLog.fallbackReason} /> : null}
     </article>
   );
 }
@@ -477,44 +585,13 @@ function PrizePoolEvidence({ ui, receipt }: { ui?: MatchUiResponse; receipt?: Ma
     <div className="evidence-grid">
       <EvidenceRow label="PrizePool contract" value={prizePoolAddress ?? "pending from backend"} mono />
       <EvidenceRow label="MATCH_STAKE_WEI" value={stakeWei ?? "pending from backend"} mono />
-      <EvidenceRow
-        label="Rulebook hash"
-        value={rulesHash ?? "pending from backend"}
-        mono
-        tone={rulesHash ? "good" : "warn"}
-      />
-      <EvidenceRow
-        label="Rulebook version"
-        value={receipt?.rulesVersion ?? "pending until receipt"}
-        tone={receipt?.rulesVersion ? "good" : "warn"}
-      />
-      <EvidenceRow
-        label="Rulebook retrieval"
-        value={receipt?.rulesUrl ?? "pending until final receipt"}
-        mono
-        tone={receipt?.rulesUrl ? "good" : "warn"}
-      />
-      <EvidenceRow
-        label="Pool creation tx"
-        value={poolCreation ?? "unavailable from current /ui payload"}
-        mono
-        tone={poolCreation ? "good" : "warn"}
-      />
-      <EvidenceRow
-        label="Fully funded"
-        value={fullyFunded === undefined ? "pending from backend" : fullyFunded ? "true" : "false"}
-        tone={fullyFunded ? "good" : "warn"}
-      />
-      <EvidenceRow
-        label="Total pool wei"
-        value={receipt?.totalPoolWei ?? "pending until receipt"}
-        mono
-      />
-      <EvidenceRow
-        label="Archive mode"
-        value={receipt?.archiveMode ?? "pending"}
-        tone={receipt?.archiveMode === "0g" ? "good" : receipt?.archiveMode ? "warn" : undefined}
-      />
+      <EvidenceRow label="Rulebook hash" value={rulesHash ?? "pending from backend"} mono tone={rulesHash ? "good" : "warn"} />
+      <EvidenceRow label="Rulebook version" value={receipt?.rulesVersion ?? "pending until receipt"} tone={receipt?.rulesVersion ? "good" : "warn"} />
+      <EvidenceRow label="Rulebook retrieval" value={receipt?.rulesUrl ?? "pending until final receipt"} mono tone={receipt?.rulesUrl ? "good" : "warn"} />
+      <EvidenceRow label="Pool creation tx" value={poolCreation ?? "unavailable from current /ui payload"} mono tone={poolCreation ? "good" : "warn"} />
+      <EvidenceRow label="Fully funded" value={fullyFunded === undefined ? "pending from backend" : fullyFunded ? "true" : "false"} tone={fullyFunded ? "good" : "warn"} />
+      <EvidenceRow label="Total pool wei" value={receipt?.totalPoolWei ?? data?.totalPoolWei ?? "pending until receipt"} mono />
+      <EvidenceRow label="Archive mode" value={receipt?.archiveMode ?? "pending"} tone={receipt?.archiveMode === "0g" ? "good" : receipt?.archiveMode ? "warn" : undefined} />
       {data?.storageError ? <StatusBanner tone="bad" label="Storage failure" value={data.storageError} /> : null}
       {data?.payoutError ? <StatusBanner tone="bad" label="Payout failure" value={data.payoutError} /> : null}
       {data?.prizePoolError ? <StatusBanner tone="bad" label="PrizePool read failure" value={data.prizePoolError} /> : null}
@@ -572,11 +649,7 @@ function BidStatus({
       {pendingBids.map((bid) => (
         <div className="bid-card" key={bid.playerId}>
           <span>{playerName(players, bid.playerId)}</span>
-          {revealed.has(bid.playerId) ? (
-            <strong>Revealed: {revealed.get(bid.playerId)}</strong>
-          ) : (
-            <strong>{bid.submitted ? "Submitted, hidden" : "Waiting for bid"}</strong>
-          )}
+          {revealed.has(bid.playerId) ? <strong>Revealed: {revealed.get(bid.playerId)}</strong> : <strong>{bid.submitted ? "Submitted, hidden" : "Waiting for bid"}</strong>}
         </div>
       ))}
     </div>
@@ -587,7 +660,6 @@ function RoundHistory({ history, players }: { history: RoundSummary[]; players: 
   if (history.length === 0) {
     return <EmptyState text="Round history will appear after the first simultaneous reveal." />;
   }
-
   return (
     <div className="history-table">
       <div className="table-row table-head">
@@ -610,15 +682,7 @@ function RoundHistory({ history, players }: { history: RoundSummary[]; players: 
   );
 }
 
-function FinalReceipt({
-  receipt,
-  winner,
-  status,
-}: {
-  receipt?: MatchReceipt;
-  winner?: string;
-  status?: string;
-}) {
+function FinalReceipt({ receipt, winner, status }: { receipt?: MatchReceipt; winner?: string; status?: string }) {
   if (!receipt) {
     return (
       <div className="receipt-pending">
@@ -628,7 +692,6 @@ function FinalReceipt({
       </div>
     );
   }
-
   return (
     <div className="receipt-grid">
       <EvidenceRow label="Match ID" value={receipt.matchId} mono />
@@ -637,8 +700,6 @@ function FinalReceipt({
       <EvidenceRow label="0G Storage hash" value={receipt.archiveHash} mono tone={receipt.archiveMode === "0g" ? "good" : "warn"} />
       <EvidenceRow label="Storage retrieval" value={receipt.archiveUrl ?? "Use the 0G storage indexer with this root hash."} mono />
       <EvidenceRow label="Rulebook hash" value={receipt.rulesHash} mono tone="good" />
-      <EvidenceRow label="Rulebook version" value={receipt.rulesVersion} />
-      <EvidenceRow label="Rulebook retrieval" value={receipt.rulesUrl} mono />
       <EvidenceRow label="Payout amount wei" value={receipt.payoutAmountWei} mono />
       <EvidenceRow label="Payout tx hash" value={receipt.payoutTxHash ?? "missing"} mono tone={receipt.payoutTxHash ? "good" : "bad"} />
       <EvidenceRow label="Completed" value={receipt.completedAt} />
@@ -655,6 +716,31 @@ function FinalReceipt({
         ))}
       </div>
     </div>
+  );
+}
+
+function InfoList({ title, items }: { title: string; items: string[] }) {
+  return (
+    <article className="info-panel">
+      <h2>{title}</h2>
+      <ul>
+        {items.map((item) => (
+          <li key={item}>{item}</li>
+        ))}
+      </ul>
+    </article>
+  );
+}
+
+function PlatformHeader({ eyebrow, title, action }: { eyebrow: string; title: string; action?: React.ReactNode }) {
+  return (
+    <header className="platform-header">
+      <div>
+        <div className="eyebrow">{eyebrow}</div>
+        <h1>{title}</h1>
+      </div>
+      {action}
+    </header>
   );
 }
 
@@ -711,11 +797,18 @@ function EmptyState({ text }: { text: string }) {
 }
 
 function parseRoute(): Route {
-  const match = window.location.pathname.match(/^\/(?:match|game)\/([^/]+)$/);
-  if (match) {
-    return { name: "match", id: decodeURIComponent(match[1]) };
+  const live = window.location.pathname.match(/^\/(?:match|game)\/([^/]+)$/);
+  if (live) {
+    return { name: "liveGame", id: decodeURIComponent(live[1]) };
   }
-  return { name: "home" };
+  const detail = window.location.pathname.match(/^\/games\/([^/]+)$/);
+  if (detail) {
+    return { name: "gameDetail", id: decodeURIComponent(detail[1]) };
+  }
+  if (window.location.pathname === "/games") {
+    return { name: "games" };
+  }
+  return { name: "landing" };
 }
 
 function latestMessageFor(
@@ -728,17 +821,11 @@ function latestMessageFor(
   return [...messages].reverse().find((message) => message.playerId === playerId)?.text;
 }
 
-function bidSubmitted(
-  bids: Array<{ playerId: string; submitted: boolean }>,
-  playerId?: string,
-): boolean {
+function bidSubmitted(bids: Array<{ playerId: string; submitted: boolean }>, playerId?: string): boolean {
   return Boolean(playerId && bids.find((bid) => bid.playerId === playerId)?.submitted);
 }
 
-function revealedBid(
-  bids: Array<{ playerId: string; amount: number }>,
-  playerId?: string,
-): number | undefined {
+function revealedBid(bids: Array<{ playerId: string; amount: number }>, playerId?: string): number | undefined {
   return playerId ? bids.find((bid) => bid.playerId === playerId)?.amount : undefined;
 }
 
@@ -788,4 +875,11 @@ function formatMaybe(value: unknown): string {
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+function gameDescription(gameId: string, name: string): string {
+  if (gameId === "sovereign-bluff") {
+    return "Five rounds of broadcasts, hidden bids, treasury swings, and final payout evidence.";
+  }
+  return `${name} is listed by the backend registry. Extra metadata is not exposed yet.`;
 }
