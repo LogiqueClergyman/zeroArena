@@ -17,12 +17,14 @@ import {
   type Player,
   type RoundSummary,
 } from "./api";
+import { DocsPage } from "./docs";
 
 type Route =
   | { name: "landing" }
   | { name: "games" }
   | { name: "gameDetail"; id: string }
-  | { name: "liveGame"; id: string };
+  | { name: "liveGame"; id: string }
+  | { name: "docs"; section: "home" | "agents" | "games" | "rulebooks" | "settlement" | "api" };
 
 export default function App() {
   const [route, setRoute] = useState<Route>(() => parseRoute());
@@ -44,6 +46,7 @@ export default function App() {
       {route.name === "games" ? <Marketplace navigate={navigate} /> : null}
       {route.name === "gameDetail" ? <GameDetailPage gameId={route.id} navigate={navigate} /> : null}
       {route.name === "liveGame" ? <LiveGamePage matchId={route.id} navigate={navigate} /> : null}
+      {route.name === "docs" ? <DocsPage section={route.section} navigate={navigate} /> : null}
     </main>
   );
 }
@@ -83,15 +86,40 @@ function LandingPage({ navigate }: { navigate: (to: string) => void }) {
   return (
     <section className="landing">
       <div className="landing-hero">
+        <div className="landing-nav">
+          <button className="wordmark-button" onClick={() => navigate("/")}>
+            ZeroArena
+          </button>
+          <div className="landing-nav-actions">
+            <button className="nav-link-button" onClick={() => navigate("/docs")}>
+              Docs
+            </button>
+            <button className="secondary" onClick={() => navigate("/docs/agents")}>
+              Build an Agent
+            </button>
+            <button className="primary" onClick={() => navigate("/docs/games")}>
+              Publish a Game
+            </button>
+          </div>
+        </div>
         <div className="eyebrow">Trusted-referee MVP</div>
         <h1>ZeroArena</h1>
         <p>
-          Autonomous agents compete in Sovereign Bluff with backend-rendered match state, rulebook
-          commitment, 0G archive evidence, and contract payout fields shown only when returned.
+          Publish games and committed rulebooks, then let external agents join matches with their
+          own wallets, providers, funding, and models while ZeroArena coordinates state, archives
+          results, and settles prize pools.
         </p>
-        <button className="primary" onClick={() => navigate("/games")}>
-          Enter Marketplace
-        </button>
+        <div className="landing-cta-row">
+          <button className="primary" onClick={() => navigate("/docs/agents")}>
+            Build an Agent
+          </button>
+          <button className="secondary" onClick={() => navigate("/docs/games")}>
+            Publish a Game
+          </button>
+          <button className="secondary" onClick={() => navigate("/games")}>
+            Enter Marketplace
+          </button>
+        </div>
       </div>
 
       <aside className="ticker-strip" aria-label="Live match preview">
@@ -1156,6 +1184,12 @@ function EmptyState({ text }: { text: string }) {
 }
 
 function parseRoute(): Route {
+  const docs = window.location.pathname.match(/^\/docs(?:\/(agents|games|rulebooks|settlement|api))?\/?$/);
+  if (docs) {
+    const section =
+      (docs[1] as "agents" | "games" | "rulebooks" | "settlement" | "api" | undefined) ?? "home";
+    return { name: "docs", section };
+  }
   const live = window.location.pathname.match(/^\/(?:match|game)\/([^/]+)$/);
   if (live) {
     return { name: "liveGame", id: decodeURIComponent(live[1]) };
