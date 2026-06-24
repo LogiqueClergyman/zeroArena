@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   createDemoMatch,
   getGameDetail,
@@ -12,6 +12,7 @@ import {
   type GameDetail,
   type GameEngineSummary,
   type MatchReceipt,
+  type MatchStatus,
   type MatchSummary,
   type MatchUiResponse,
   type Player,
@@ -38,22 +39,203 @@ export default function App() {
   const navigate = (to: string) => {
     window.history.pushState(null, "", to);
     setRoute(parseRoute());
+    document.querySelector(".content")?.scrollTo(0, 0);
   };
 
   return (
-    <main className={route.name === "liveGame" ? "game-shell" : "platform-shell"}>
-      {route.name === "landing" ? <LandingPage navigate={navigate} /> : null}
+    <AppShell route={route} navigate={navigate}>
+      {route.name === "landing" ? <LobbyPage navigate={navigate} /> : null}
       {route.name === "games" ? <Marketplace navigate={navigate} /> : null}
       {route.name === "gameDetail" ? <GameDetailPage gameId={route.id} navigate={navigate} /> : null}
       {route.name === "liveGame" ? <LiveGamePage matchId={route.id} navigate={navigate} /> : null}
       {route.name === "docs" ? <DocsPage section={route.section} navigate={navigate} /> : null}
-    </main>
+    </AppShell>
   );
 }
 
-function LandingPage({ navigate }: { navigate: (to: string) => void }) {
-  const [health, setHealth] = useState<"checking" | "online" | "offline">("checking");
+/* ============================ SHELL ============================ */
+
+function useLiveSummary() {
+  const [matches, setMatches] = useState<MatchSummary[]>([]);
+  const [online, setOnline] = useState(false);
+  useEffect(() => {
+    let stopped = false;
+    const refresh = async () => {
+      try {
+        await getHealth();
+        const live = await getLiveMatches();
+        if (!stopped) {
+          setOnline(true);
+          setMatches(live);
+        }
+      } catch {
+        if (!stopped) {
+          setOnline(false);
+          setMatches([]);
+        }
+      }
+    };
+    void refresh();
+    const timer = window.setInterval(refresh, 5000);
+    return () => {
+      stopped = true;
+      window.clearInterval(timer);
+    };
+  }, []);
+  return { matches, online };
+}
+
+function AppShell({
+  route,
+  navigate,
+  children,
+}: {
+  route: Route;
+  navigate: (to: string) => void;
+  children: ReactNode;
+}) {
+  const { matches, online } = useLiveSummary();
+  const bluffMatches = matches.filter((match) => match.gameId === "sovereign-bluff");
+  const c4Matches = matches.filter((match) => match.gameId === "connect4");
+  const agentsOnline = matches.reduce((total, match) => total + match.players.length, 0);
+  const liveGameId =
+    route.name === "liveGame" ? matches.find((match) => match.matchId === route.id)?.gameId : undefined;
+
+  const arenaActive = route.name === "games" || route.name === "gameDetail";
+  const bluffActive = liveGameId === "sovereign-bluff";
+  const c4Active = liveGameId === "connect4";
+
+  const goLiveGame = (gameId: string, fallback: string) => {
+    const match = matches.find((item) => item.gameId === gameId);
+    navigate(match ? `/game/${match.matchId}` : fallback);
+  };
+
+  return (
+    <div className="app-shell">
+      <aside className="sidebar">
+        <button className="sidebar-logo" onClick={() => navigate("/")}>
+          <span className="logo-mark" />
+          <span className="logo-word">
+            Zero<b>Arena</b>
+          </span>
+        </button>
+
+        <div className="seg-toggle">
+          <button className="seg active">Spectate</button>
+          <button className="seg">Compete</button>
+        </div>
+
+        <nav className="nav-scroll sx" aria-label="Primary">
+          <div className="nav-group">MAIN</div>
+          <NavItem
+            active={route.name === "landing"}
+            label="Lobby"
+            icon={IconHome}
+            onClick={() => navigate("/")}
+          />
+          <NavItem active={arenaActive} label="All Games" icon={IconGrid} onClick={() => navigate("/games")} />
+
+          <div className="nav-group">LIVE TABLES</div>
+          <NavItem
+            active={bluffActive}
+            label="Sovereign Bluff"
+            icon={IconCards}
+            count={bluffMatches.length}
+            onClick={() => goLiveGame("sovereign-bluff", "/games/sovereign-bluff")}
+          />
+          <NavItem
+            active={c4Active}
+            label="Connect Four"
+            icon={IconTarget}
+            count={c4Matches.length}
+            onClick={() => goLiveGame("connect4", "/games/connect4")}
+          />
+          <NavItem label="Sealed Poker" icon={IconPoker} soon disabled />
+
+          <div className="nav-group">PROTOCOL</div>
+          <NavItem
+            active={route.name === "docs"}
+            label="How it settles"
+            icon={IconDoc}
+            onClick={() => navigate("/docs")}
+          />
+          <NavItem label="Leaderboard" icon={IconChart} disabled />
+        </nav>
+
+        <div className="sidebar-foot">
+          <div className="agents-online">
+            <span className={cx("dot", online ? "green" : "rose", "blink")} />
+            <span>Agents online</span>
+            <b>{online ? agentsOnline : "—"}</b>
+          </div>
+        </div>
+      </aside>
+
+      <div className="main-col">
+        <header className="topbar">
+          <div className="topbar-inner">
+            <div className="search-box">
+              {IconSearch}
+              <span>Search agents, tables…</span>
+            </div>
+            <div className="top-spacer" />
+            <div className={cx("top-live", !online && "offline")}>
+              <span className={cx("dot", "sm", online ? "rose" : "dim", "blink")} />
+              <span>{online ? `${matches.length} LIVE` : "OFFLINE"}</span>
+            </div>
+            <div className="balance-chip">
+              <span className="coin" />
+              <b>8.4210</b>
+              <span>ETH</span>
+            </div>
+            <button className="wallet-btn">
+              {IconWallet}
+              <span>Wallet</span>
+            </button>
+            <div className="avatar-dot" />
+          </div>
+        </header>
+
+        <div className="content sx">{children}</div>
+      </div>
+    </div>
+  );
+}
+
+function NavItem({
+  active,
+  label,
+  icon,
+  count,
+  soon,
+  disabled,
+  onClick,
+}: {
+  active?: boolean;
+  label: string;
+  icon: ReactNode;
+  count?: number;
+  soon?: boolean;
+  disabled?: boolean;
+  onClick?: () => void;
+}) {
+  return (
+    <button className={cx("nav-item", active && "active", disabled && "disabled")} onClick={disabled ? undefined : onClick}>
+      <span className="nav-bar" />
+      {icon}
+      <span className="nav-label">{label}</span>
+      {soon ? <span className="nav-soon">SOON</span> : null}
+      {count !== undefined && count > 0 ? <span className="nav-count">{count}</span> : null}
+    </button>
+  );
+}
+
+/* ============================ LOBBY ============================ */
+
+function LobbyPage({ navigate }: { navigate: (to: string) => void }) {
+  const [games, setGames] = useState<GameEngineSummary[]>([]);
   const [liveMatches, setLiveMatches] = useState<MatchSummary[]>([]);
+  const [health, setHealth] = useState<"checking" | "online" | "offline">("checking");
   const [error, setError] = useState<string>();
 
   useEffect(() => {
@@ -61,16 +243,16 @@ function LandingPage({ navigate }: { navigate: (to: string) => void }) {
     const refresh = async () => {
       try {
         await getHealth();
-        const matches = await getLiveMatches();
+        const [gameList, matches] = await Promise.all([getGames(), getLiveMatches()]);
         if (!stopped) {
           setHealth("online");
+          setGames(gameList);
           setLiveMatches(matches);
           setError(undefined);
         }
       } catch (err) {
         if (!stopped) {
           setHealth("offline");
-          setLiveMatches([]);
           setError(errorMessage(err));
         }
       }
@@ -83,65 +265,182 @@ function LandingPage({ navigate }: { navigate: (to: string) => void }) {
     };
   }, []);
 
+  const agentsInPlay = liveMatches.reduce((total, match) => total + match.players.length, 0);
+  const featuredGames = games.slice(0, 4);
+
   return (
-    <section className="landing">
-      <div className="landing-hero">
-        <div className="landing-nav">
-          <button className="wordmark-button" onClick={() => navigate("/")}>
-            ZeroArena
-          </button>
-          <div className="landing-nav-actions">
-            <button className="nav-link-button" onClick={() => navigate("/docs")}>
-              Docs
+    <section className="screen">
+      <div className="hero-banner">
+        <div className="hero-inner">
+          <div className="hero-badge">
+            <span className="dot sm blue blink" />
+            <span>TRUSTED-REFEREE · 0G ARCHIVE · ON-CHAIN SETTLE</span>
+          </div>
+          <h1>
+            Where autonomous agents compete for <span className="grad-text">real stakes.</span>
+          </h1>
+          <p>
+            Bring your own model, wallet, and strategy. ZeroArena runs sealed matches, archives every
+            state to 0G, and settles the prize pool on-chain.
+          </p>
+          <div className="hero-cta">
+            <button className="btn btn-primary" onClick={() => navigate("/games")}>
+              Browse games →
             </button>
-            <button className="secondary" onClick={() => navigate("/docs/agents")}>
-              Build an Agent
-            </button>
-            <button className="primary" onClick={() => navigate("/docs/games")}>
-              Publish a Game
+            <button className="btn btn-ghost" onClick={() => navigate("/docs")}>
+              How it settles
             </button>
           </div>
         </div>
-        <div className="eyebrow">Trusted-referee MVP</div>
-        <h1>ZeroArena</h1>
-        <p>
-          Publish games and committed rulebooks, then let external agents join matches with their
-          own wallets, providers, funding, and models while ZeroArena coordinates state, archives
-          results, and settles prize pools.
-        </p>
-        <div className="landing-cta-row">
-          <button className="primary" onClick={() => navigate("/docs/agents")}>
-            Build an Agent
-          </button>
-          <button className="secondary" onClick={() => navigate("/docs/games")}>
-            Publish a Game
-          </button>
-          <button className="secondary" onClick={() => navigate("/games")}>
-            Enter Marketplace
-          </button>
-        </div>
       </div>
 
-      <aside className="ticker-strip" aria-label="Live match preview">
-        <div>
-          <span className={health === "online" ? "signal online" : "signal"} />
-          Backend {health}
-        </div>
-        {error ? <strong>{error}</strong> : null}
-        {liveMatches.length === 0 && !error ? <strong>No live matches reported.</strong> : null}
-        {liveMatches.slice(0, 3).map((match) => (
-          <button key={match.matchId} onClick={() => navigate(`/game/${match.matchId}`)}>
-            <span>{match.gameId}</span>
-            <strong>{match.status}</strong>
-            <small>
-              {match.matchId} / round {match.round}
-            </small>
-          </button>
+      <div className="lobby-stats">
+        <LStat value={String(liveMatches.length)} label="Live matches now" />
+        <LStat value={String(games.length)} label="Games available" tone="amber" />
+        <LStat value={String(agentsInPlay)} label="Agents in play" />
+        <LStat value="100%" label="Verifiable outcomes" tone="green" />
+      </div>
+
+      <div className="row-head">
+        <h2>
+          {IconGridBlue}
+          Games
+        </h2>
+        <button className="view-all" onClick={() => navigate("/games")}>
+          View all →
+        </button>
+      </div>
+      <div className="game-tiles">
+        {featuredGames.map((game) => (
+          <GameTile
+            key={game.id}
+            game={game}
+            liveCount={liveMatches.filter((match) => match.gameId === game.id).length}
+            onClick={() => navigate(`/games/${game.id}`)}
+          />
         ))}
-      </aside>
+        {featuredGames.length === 0 ? (
+          <div className="empty-state">{health === "offline" ? "Backend offline." : "Loading games…"}</div>
+        ) : null}
+      </div>
+
+      <div className="live-table">
+        <div className="lt-head">
+          <div className="t">
+            <span className={cx("dot", liveMatches.length ? "green" : "dim", "blink")} />
+            Live tables
+          </div>
+          <div className="lt-tabs">
+            <button className="lt-tab active">All</button>
+            <button className="lt-tab">High stakes</button>
+            <button className="lt-tab">Settling</button>
+          </div>
+        </div>
+        <div className="lt-scroll sx">
+          <div className="lt-colhead">
+            <div>GAME</div>
+            <div>TABLE</div>
+            <div>AGENTS</div>
+            <div>ROUND</div>
+            <div>STATUS</div>
+            <div className="r">WINNER</div>
+          </div>
+          {liveMatches.length === 0 ? (
+            <div className="lt-empty">
+              {error ? `Backend offline — ${error}` : "No live tables. Open a game and start a demo table."}
+            </div>
+          ) : (
+            liveMatches.map((match) => <LiveTableRow key={match.matchId} match={match} navigate={navigate} />)
+          )}
+        </div>
+      </div>
     </section>
   );
 }
+
+function LStat({ value, label, tone }: { value: string; label: string; tone?: "amber" | "green" }) {
+  return (
+    <div className="lstat">
+      <div className={cx("v", tone)}>{value}</div>
+      <div className="k">{label}</div>
+    </div>
+  );
+}
+
+function LiveTableRow({ match, navigate }: { match: MatchSummary; navigate: (to: string) => void }) {
+  const [left, right] = match.players;
+  const style = liveStatusStyle(match.status);
+  return (
+    <button className="lt-row" onClick={() => navigate(`/game/${match.matchId}`)}>
+      <div className="lt-game">
+        <span className="dot" style={{ background: accentRaw(match.gameId) }} />
+        <span>{gameLabel(match.gameId)}</span>
+      </div>
+      <div className="lt-cell">{shortId(match.matchId)}</div>
+      <div className="lt-agents">
+        <span className="a">{left?.name ?? left?.id ?? "A"}</span>
+        <span className="vs">vs</span>
+        <span className="b">{right?.name ?? right?.id ?? "B"}</span>
+      </div>
+      <div className="lt-pool">{match.round}</div>
+      <div>
+        <span className="lt-status" style={{ color: style.color, background: style.bg }}>
+          {match.status.toUpperCase()}
+        </span>
+      </div>
+      <div className="lt-payout" style={{ color: match.winner ? "var(--green)" : "var(--dim)" }}>
+        {match.winner ? playerName(match.players, match.winner) : "—"}
+      </div>
+    </button>
+  );
+}
+
+function GameTile({
+  game,
+  liveCount,
+  onClick,
+  wide,
+  description,
+}: {
+  game: GameEngineSummary;
+  liveCount: number;
+  onClick: () => void;
+  wide?: boolean;
+  description?: string;
+}) {
+  const theme = tileTheme(game.id);
+  return (
+    <button className="game-tile" onClick={onClick}>
+      <div
+        className="tile-art"
+        style={{ background: theme.bg, "--tile-glow": theme.glow } as React.CSSProperties}
+      >
+        <span className="tile-mono" style={{ color: theme.color }}>
+          {theme.mono}
+        </span>
+        {liveCount > 0 ? (
+          <div className="tile-flag">
+            <span className="dot sm green blink" />
+            {liveCount} live
+          </div>
+        ) : null}
+      </div>
+      <div className="tile-body">
+        <div className="tile-tag">{gameTag(game.id)}</div>
+        <div className="tile-name">{game.name}</div>
+        {wide ? <p className="tile-desc">{description ?? gameDescription(game.id, game.name)}</p> : null}
+        <div className="tile-foot">
+          <span className="meta">
+            {game.minPlayers}-{game.maxPlayers} agents · {liveCount} active
+          </span>
+          <span className="go">Inspect →</span>
+        </div>
+      </div>
+    </button>
+  );
+}
+
+/* ============================ ALL GAMES ============================ */
 
 function Marketplace({ navigate }: { navigate: (to: string) => void }) {
   const [games, setGames] = useState<GameEngineSummary[]>([]);
@@ -176,40 +475,33 @@ function Marketplace({ navigate }: { navigate: (to: string) => void }) {
   }, []);
 
   return (
-    <section className="platform-page">
-      <PlatformHeader
-        eyebrow="Game marketplace"
-        title="Available arenas"
-        action={<button className="secondary" onClick={() => navigate("/")}>Back</button>}
-      />
+    <section className="screen">
+      <h1 className="page-title">All games</h1>
+      <p className="page-intro">
+        Refereed games open for agent matches. Pick one to inspect its rulebook, stakes, and live
+        tables.
+      </p>
       {error ? <StatusBanner tone="bad" label="Backend error" value={error} /> : null}
-      {loading ? <StatusBanner tone="warn" label="Loading" value="Reading /games and /matches/live." /> : null}
-      <div className="game-grid">
-        {games.map((game) => {
-          const matches = liveMatches.filter((match) => match.gameId === game.id);
-          return (
-            <article className="game-card" key={game.id}>
-              <div>
-                <span className="eyebrow">Deployed game</span>
-                <h2>{game.name}</h2>
-                <p>{gameDescription(game.id, game.name)}</p>
-              </div>
-              <div className="game-facts">
-                <Metric label="Players" value={`${game.minPlayers}-${game.maxPlayers}`} />
-                <Metric label="Active matches" value={String(matches.length)} />
-                <Metric label="Rulebook" value={matches.length ? "check live match" : "pending live match"} />
-              </div>
-              <button className="primary" onClick={() => navigate(`/games/${game.id}`)}>
-                View Game
-              </button>
-            </article>
-          );
-        })}
+      {loading && !error ? (
+        <StatusBanner tone="warn" label="Loading" value="Reading /games and /matches/live." />
+      ) : null}
+      <div className="game-tiles wide">
+        {games.map((game) => (
+          <GameTile
+            key={game.id}
+            game={game}
+            liveCount={liveMatches.filter((match) => match.gameId === game.id).length}
+            onClick={() => navigate(`/games/${game.id}`)}
+            wide
+          />
+        ))}
       </div>
       {games.length === 0 && !loading ? <EmptyState text="No games returned by /games." /> : null}
     </section>
   );
 }
+
+/* ============================ GAME DETAIL ============================ */
 
 function GameDetailPage({ gameId, navigate }: { gameId: string; navigate: (to: string) => void }) {
   const [detail, setDetail] = useState<GameDetail>();
@@ -235,8 +527,10 @@ function GameDetailPage({ gameId, navigate }: { gameId: string; navigate: (to: s
     setStarting(true);
     try {
       const match = await createDemoMatch(gameId);
-      void startDemoAgents(match.matchId).catch((err) => setError(`Demo agent runner failed: ${errorMessage(err)}`));
-      window.open(`/game/${match.matchId}`, "_blank", "noopener,noreferrer");
+      void startDemoAgents(match.matchId).catch((err) =>
+        setError(`Demo agent runner failed: ${errorMessage(err)}`),
+      );
+      navigate(`/game/${match.matchId}`);
       await refresh();
     } catch (err) {
       setError(errorMessage(err));
@@ -246,80 +540,96 @@ function GameDetailPage({ gameId, navigate }: { gameId: string; navigate: (to: s
   };
 
   return (
-    <section className="platform-page">
-      <PlatformHeader
-        eyebrow="Game detail"
-        title={detail?.name ?? gameId}
-        action={<button className="secondary" onClick={() => navigate("/games")}>Marketplace</button>}
-      />
+    <section className="screen detail">
+      <button className="back-link" onClick={() => navigate("/games")}>
+        ← All games
+      </button>
       {error ? <StatusBanner tone="bad" label="Backend error" value={error} /> : null}
-      {!detail ? <StatusBanner tone="warn" label="Loading" value="Reading game detail from backend and catalog adapter." /> : null}
+      {!detail ? (
+        <StatusBanner tone="warn" label="Loading" value="Reading game detail from backend and catalog adapter." />
+      ) : null}
       {detail ? (
         <>
-          <section className="detail-band">
+          <div className="detail-grid">
             <div>
-              <p>{detail.description}</p>
-              <div className="detail-actions">
-                <button className="secondary" onClick={startDemo} disabled={starting}>
-                  {starting ? "Creating..." : "Start Demo Match"}
+              <div className="detail-kicker" style={{ color: accentRaw(gameId) }}>
+                {gameTag(gameId)}
+              </div>
+              <h1>{detail.name}</h1>
+              <p className="detail-lede">{detail.description}</p>
+              <div className="fact-grid">
+                <div className="fact">
+                  <div className="k">RULEBOOK</div>
+                  <div className="v">{detail.rulebookStatus}</div>
+                  <div className="sub mono">{detail.rulebookHash ?? "hash pending until a live match"}</div>
+                </div>
+                <div className="fact">
+                  <div className="k">PLAYERS · ACTIVE</div>
+                  <div className="v mono" style={{ color: accentRaw(gameId) }}>
+                    {detail.minPlayers}-{detail.maxPlayers} · {detail.activeMatchCount}
+                  </div>
+                  <div className="sub">Sealed-move referee · 0G archive · on-chain settle</div>
+                </div>
+              </div>
+              <div className="detail-cta">
+                <button className="btn btn-primary" onClick={startDemo} disabled={starting}>
+                  {starting ? "Creating…" : "Start a demo table"} →
+                </button>
+                <button className="btn btn-ghost" onClick={() => navigate("/docs")}>
+                  View rulebook
                 </button>
               </div>
             </div>
-            <div className="evidence-grid compact">
-              <EvidenceRow label="Player count" value={`${detail.minPlayers}-${detail.maxPlayers}`} />
-              <EvidenceRow label="Active matches" value={String(detail.activeMatchCount)} />
-              <EvidenceRow label="Rulebook status" value={detail.rulebookStatus} tone={detail.rulebookHash ? "good" : "warn"} />
-              <EvidenceRow label="Rulebook hash" value={detail.rulebookHash ?? "not exposed by backend"} mono tone={detail.rulebookHash ? "good" : "warn"} />
-            </div>
-          </section>
 
-          <section className="info-grid">
+            <div className="panel">
+              <div className="panel-head">
+                <span className="t">Live tables</span>
+                <span className="c">{detail.activeMatchCount} active</span>
+              </div>
+              {detail.activeMatches.length === 0 ? (
+                <div style={{ padding: "16px 18px" }}>
+                  <EmptyState text="No active matches. Start a demo table to populate this list." />
+                </div>
+              ) : (
+                detail.activeMatches.map((match) => (
+                  <button
+                    key={match.matchId}
+                    className="table-item"
+                    onClick={() => navigate(`/game/${match.matchId}`)}
+                  >
+                    <div>
+                      <div className="names">{matchVersus(match)}</div>
+                      <div className="sub">
+                        Round {match.round} · {shortId(match.matchId)}
+                      </div>
+                    </div>
+                    <span className="pill hot">
+                      <span className="dot sm rose blink" />
+                      {match.status.toUpperCase()}
+                    </span>
+                  </button>
+                ))
+              )}
+            </div>
+          </div>
+
+          <div className="lower-grid" style={{ marginTop: 24 }}>
             <InfoList title="Rules" items={detail.rules} />
             <InfoList title="Instructions" items={detail.instructions} />
-            <article className="info-panel">
-              <h2>Prize Pool Model</h2>
-              <p>{detail.prizePoolModel}</p>
+            <article className="data-card">
+              <h2>Prize pool model</h2>
+              <p style={{ color: "var(--muted)", lineHeight: 1.55, fontSize: 14, margin: 0 }}>
+                {detail.prizePoolModel}
+              </p>
             </article>
-          </section>
-
-          <section className="match-section">
-            <h2>Active Matches</h2>
-            {detail.activeMatches.length === 0 ? <EmptyState text="No active/running matches for this game." /> : null}
-            <div className="active-match-list">
-              {detail.activeMatches.map((match) => (
-                <ActiveMatchCard key={match.matchId} match={match} />
-              ))}
-            </div>
-          </section>
+          </div>
         </>
       ) : null}
     </section>
   );
 }
 
-function ActiveMatchCard({ match }: { match: MatchSummary }) {
-  return (
-    <article className="active-match-card">
-      <div>
-        <strong>{match.matchId}</strong>
-        <span>
-          {match.players.map((player) => player.name || player.id).join(" vs ") || "players pending"}
-        </span>
-      </div>
-      <div className="match-meta-row">
-        <Metric label="Round" value={String(match.round)} />
-        <Metric label="Status" value={match.status} />
-        <Metric label="Funding/archive/payout" value="open live backend view" />
-      </div>
-      <button
-        className="primary"
-        onClick={() => window.open(`/game/${match.matchId}`, "_blank", "noopener,noreferrer")}
-      >
-        Open Live Game
-      </button>
-    </article>
-  );
-}
+/* ============================ LIVE ============================ */
 
 function LiveGamePage({ matchId, navigate }: { matchId: string; navigate: (to: string) => void }) {
   const [ui, setUi] = useState<MatchUiResponse>();
@@ -364,196 +674,459 @@ function LiveGamePage({ matchId, navigate }: { matchId: string; navigate: (to: s
   const receipt = ui?.receipt;
   const winner = receipt?.winner ?? data?.winner;
   const latestLogs = useMemo(() => latestLogByPlayer(ui?.agentLogs ?? []), [ui?.agentLogs]);
+  const gameId = ui?.gameId ?? "sovereign-bluff";
 
-  return (
-    <section className="live-game-page">
-      <nav className="game-nav">
-        <button className="secondary" onClick={() => navigate(`/games/${ui?.gameId ?? "sovereign-bluff"}`)}>Game Detail</button>
-        <span>{matchId}</span>
-        <strong>{ui?.status ?? (loading ? "loading" : "pending")}</strong>
-      </nav>
-      {error ? <StatusBanner tone="bad" label="Polling error" value={error} /> : null}
-      {ui?.runnerError ? <StatusBanner tone="bad" label="Agent runner error" value={ui.runnerError} /> : null}
-      {loading ? <StatusBanner tone="warn" label="Loading" value="Waiting for /match/:id/ui." /> : null}
+  const shared = { ui, data, players, winner, receipt, latestLogs, matchId, navigate, error, loading };
 
-      {ui?.gameId === "connect4" ? (
-        <Connect4LiveScreen
-          ui={ui}
-          data={data}
-          players={players}
-          winner={winner}
-          receipt={receipt}
-          latestLogs={latestLogs}
-        />
-      ) : (
-        <SovereignBluffLiveScreen
-          ui={ui}
-          data={data}
-          players={players}
-          winner={winner}
-          receipt={receipt}
-          latestLogs={latestLogs}
-        />
-      )}
-    </section>
-  );
+  if (gameId === "connect4") {
+    return <Connect4LiveScreen {...shared} />;
+  }
+  return <SovereignBluffLiveScreen {...shared} />;
 }
 
-function SovereignBluffLiveScreen({
-  ui,
-  data,
-  players,
-  winner,
-  receipt,
-  latestLogs,
-}: {
+type LiveProps = {
   ui?: MatchUiResponse;
   data?: MatchUiResponse["render"]["data"];
   players: Player[];
   winner?: string;
   receipt?: MatchReceipt;
   latestLogs: Map<string, AgentLog>;
-}) {
-  return (
-    <>
-      <SovereignBluffStage data={data} players={players} winner={winner} status={ui?.status ?? "waiting"} />
-      <section className="sovereign-screen-layout">
-        <div className="game-side">
-          <h2>Agents</h2>
-          <AgentGrid players={players} latestLogs={latestLogs} winner={winner} />
-        </div>
-        <div className="game-side">
-          <h2>Live Round</h2>
-          <Broadcasts messages={data?.messages ?? []} players={players} />
-          <BidStatus pendingBids={data?.pendingBids ?? []} revealedBids={data?.revealedBids ?? []} players={players} />
-        </div>
-        <div className="game-side">
-          <h2>Settlement Evidence</h2>
-          <div className="settlement-stack">
-            <PrizePoolEvidence ui={ui} receipt={receipt} />
-            <FinalReceipt receipt={receipt} winner={winner} status={ui?.status} />
-          </div>
-        </div>
-      </section>
-      <section className="game-wide">
-        <h2>Round Ledger</h2>
-        <RoundHistory history={data?.history ?? []} players={players} />
-      </section>
-    </>
-  );
-}
+  matchId: string;
+  navigate: (to: string) => void;
+  error?: string;
+  loading: boolean;
+};
 
-function Connect4LiveScreen({
-  ui,
-  data,
-  players,
-  winner,
-  receipt,
-  latestLogs,
-}: {
-  ui?: MatchUiResponse;
-  data?: MatchUiResponse["render"]["data"];
-  players: Player[];
-  winner?: string;
-  receipt?: MatchReceipt;
-  latestLogs: Map<string, AgentLog>;
-}) {
-  return (
-    <>
-      <Connect4Stage
-        data={data}
-        players={players}
-        winner={winner}
-        status={ui?.status ?? "waiting"}
-        receipt={receipt}
-        agentLogs={ui?.agentLogs ?? []}
-        runnerError={ui?.runnerError}
-      />
-      <section className="connect4-screen-layout">
-        <div className="game-side">
-          <h2>Move Timeline</h2>
-          <Connect4MoveList moves={data?.moves ?? []} players={players} expanded />
-        </div>
-        <div className="game-side">
-          <h2>Agents</h2>
-          <AgentGrid players={players} latestLogs={latestLogs} winner={winner} />
-        </div>
-        <div className="game-side">
-          <h2>Settlement Evidence</h2>
-          <div className="settlement-stack">
-            <PrizePoolEvidence ui={ui} receipt={receipt} />
-            <FinalReceipt receipt={receipt} winner={winner} status={ui?.status} />
-          </div>
-        </div>
-      </section>
-    </>
-  );
-}
+const EMBERS = [
+  { left: "12%", bottom: "8%", size: 3, color: "#F0B45C", glow: "rgba(240,180,92,0.6)", dur: "7s", delay: "0s" },
+  { left: "24%", bottom: "4%", size: 2, color: "#F7D08A", glow: "rgba(247,208,138,0.5)", dur: "9s", delay: "1.5s" },
+  { left: "38%", bottom: "10%", size: 2, color: "#fff", glow: "rgba(255,255,255,0.4)", dur: "8s", delay: "3s" },
+  { left: "62%", bottom: "6%", size: 2, color: "#9FC0FF", glow: "rgba(125,162,255,0.5)", dur: "8.5s", delay: "0.8s" },
+  { left: "76%", bottom: "9%", size: 3, color: "#7DA2FF", glow: "rgba(125,162,255,0.5)", dur: "10s", delay: "2.2s" },
+  { left: "88%", bottom: "5%", size: 2, color: "#F0B45C", glow: "rgba(240,180,92,0.5)", dur: "7.5s", delay: "4s" },
+];
 
-function SovereignBluffStage({
-  data,
-  players,
-  winner,
-  status,
-}: {
-  data?: MatchUiResponse["render"]["data"];
-  players: Player[];
-  winner?: string;
-  status: string;
-}) {
+function SovereignBluffLiveScreen(props: LiveProps) {
+  const { ui, data, players, winner, receipt, latestLogs, matchId, navigate, error, loading } = props;
+  const status = ui?.status ?? "waiting";
   const [left, right] = players;
+  const totalRounds = Number(data?.totalRounds ?? 5);
+  const round = Number(data?.round ?? 0);
+  const history = data?.history ?? [];
   const phase = data?.phase ?? "pending";
-  const messages = data?.messages ?? [];
   const pendingBids = data?.pendingBids ?? [];
   const revealedBids = data?.revealedBids ?? [];
-  const maxBalance = Math.max(100, ...players.map((player) => Number(player.balance) || 0));
+
+  const balLeft = Number(left?.balance) || 0;
+  const balRight = Number(right?.balance) || 0;
+  const leader = balLeft === balRight ? undefined : balLeft > balRight ? left?.id : right?.id;
+
+  const leftBid = revealedBid(revealedBids, left?.id);
+  const rightBid = revealedBid(revealedBids, right?.id);
+  const reveal = leftBid !== undefined || rightBid !== undefined;
+
+  const phaseLabel = winner
+    ? "Match settled"
+    : phase === "broadcast"
+      ? "The agents posture"
+      : phase === "bidding" || phase === "commit"
+        ? "Sealed bids committed"
+        : reveal
+          ? "The reveal"
+          : formatMaybe(phase);
 
   return (
-    <section className={`arena-stage phase-${phase} ${winner ? "match-won" : ""}`}>
-      <div className="stage-skyline">
-        <div className="stage-title">
-          <span>Sovereign Bluff</span>
-          <strong>
-            Round {formatMaybe(data?.round)} of {formatMaybe(data?.totalRounds ?? 5)}
-          </strong>
+    <>
+      <div className="bluff-arena">
+        <div className="vignette" />
+        <div className="horizon" />
+        <div className="embers">
+          {EMBERS.map((e, index) => (
+            <span
+              key={index}
+              className="ember"
+              style={{
+                left: e.left,
+                bottom: e.bottom,
+                width: e.size,
+                height: e.size,
+                background: e.color,
+                boxShadow: `0 0 ${e.size * 3}px ${e.size}px ${e.glow}`,
+                animationDuration: e.dur,
+                animationDelay: e.delay,
+              }}
+            />
+          ))}
         </div>
-        <div className="phase-ribbon">
-          <span>{phase}</span>
-          <small>{status}</small>
+
+        <div className="bluff-inner">
+          <div className="bluff-top">
+            <div className="bluff-top-left">
+              <button className="bluff-crumb" onClick={() => navigate("/games/sovereign-bluff")}>
+                Sovereign Bluff ›
+              </button>
+              <span className={cx("pill", status === "failed" ? "bad" : "hot")}>
+                <span className="dot sm rose blink" />
+                {status.toUpperCase()}
+              </span>
+              <span className="bluff-table-id">table {shortId(matchId)}</span>
+            </div>
+            <div className="bluff-controls">
+              <button className="cinzel-btn gold" onClick={() => navigate("/games/sovereign-bluff")}>
+                DETAIL
+              </button>
+              <button className="cinzel-btn ghost" onClick={() => navigate("/games")}>
+                ARENA
+              </button>
+            </div>
+          </div>
+
+          <div className="bluff-title-wrap">
+            <h1 className="bluff-title">SOVEREIGN BLUFF</h1>
+            <div className="bluff-sub">
+              ROUND {toRoman(round || 1)} OF {toRoman(totalRounds)} · {phaseLabel.toUpperCase()}
+            </div>
+          </div>
+
+          <div className="round-pips">
+            {Array.from({ length: totalRounds }, (_, index) => {
+              const roundNo = index + 1;
+              const done = history.find((item) => item.round === roundNo);
+              const isCurrent = roundNo === round;
+              const color = done
+                ? done.winner
+                  ? done.winner === left?.id
+                    ? "var(--amber)"
+                    : "var(--peri)"
+                  : "var(--dim)"
+                : "#ffffff";
+              const fill = done ? 0.85 : isCurrent ? 0.4 : 0.06;
+              return (
+                <div className="pip" key={roundNo}>
+                  <i style={{ background: color, opacity: fill, boxShadow: `0 0 10px ${color}` }} />
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="bluff-stage">
+            <Champion
+              player={left}
+              side="amber"
+              balance={formatMaybe(left?.balance)}
+              thinking={bidSubmitted(pendingBids, left?.id) && leftBid === undefined}
+              leading={leader === left?.id}
+              won={winner === left?.id}
+            />
+
+            <div className="altar">
+              <div className="altar-label">ROUND TREASURY</div>
+              <div className="treasury-altar">
+                <span className="gem" />
+                <b>{formatMaybe(data?.currentTreasury)}</b>
+              </div>
+              <div className="bid-cards">
+                <BidCard label={(left?.name ?? "Atlas").toUpperCase()} side="amber" amount={leftBid} sealed={!reveal} />
+                <span className="bid-sep">✦</span>
+                <BidCard label={(right?.name ?? "Nyx").toUpperCase()} side="blue" amount={rightBid} sealed={!reveal} />
+              </div>
+              <div className="reveal-row">
+                {winner ? (
+                  <div className={cx("reveal-banner", winner === left?.id ? "amber" : winner === right?.id ? "blue" : "")}>
+                    {playerName(players, winner)} claims the crown
+                  </div>
+                ) : reveal ? (
+                  <div className="reveal-banner">{roundResultLabel(history.at(-1), players)}</div>
+                ) : (
+                  <div className="sealed-note">Bids sealed — the reveal approaches</div>
+                )}
+              </div>
+            </div>
+
+            <Champion
+              player={right}
+              side="blue"
+              balance={formatMaybe(right?.balance)}
+              thinking={bidSubmitted(pendingBids, right?.id) && rightBid === undefined}
+              leading={leader === right?.id}
+              won={winner === right?.id}
+            />
+          </div>
+
+          <div className="bluff-lower">
+            <Chronicle messages={data?.messages ?? []} players={players} winner={winner} receipt={receipt} />
+            <RiteOfSettlement ui={ui} receipt={receipt} winner={winner} players={players} />
+          </div>
         </div>
       </div>
 
-      <div className="duel-layout">
-        <AgentDuelist
-          player={left}
-          side="left"
-          message={latestMessageFor(messages, left?.id)}
-          bidSubmitted={bidSubmitted(pendingBids, left?.id)}
-          revealedBid={revealedBid(revealedBids, left?.id)}
-          maxBalance={maxBalance}
-          winner={winner === left?.id}
-        />
-        <TreasuryPot
-          amount={data?.currentTreasury}
-          phase={phase}
-          status={status}
-          winner={winner ? playerName(players, winner) : undefined}
-          lastRound={data?.history?.at(-1)}
-          players={players}
-        />
-        <AgentDuelist
-          player={right}
-          side="right"
-          message={latestMessageFor(messages, right?.id)}
-          bidSubmitted={bidSubmitted(pendingBids, right?.id)}
-          revealedBid={revealedBid(revealedBids, right?.id)}
-          maxBalance={maxBalance}
-          winner={winner === right?.id}
-        />
-      </div>
+      <section className="evidence-section">
+        {error ? <StatusBanner tone="bad" label="Polling error" value={error} /> : null}
+        {ui?.runnerError ? <StatusBanner tone="bad" label="Agent runner error" value={ui.runnerError} /> : null}
+        {loading ? <StatusBanner tone="warn" label="Loading" value="Waiting for /match/:id/ui." /> : null}
+        <div className="lower-grid">
+          <article className="data-card">
+            <h2>Agents</h2>
+            <AgentGrid players={players} latestLogs={latestLogs} winner={winner} />
+          </article>
+          <article className="data-card">
+            <h2>Bid status</h2>
+            <BidStatus pendingBids={pendingBids} revealedBids={revealedBids} players={players} />
+          </article>
+          <article className="data-card">
+            <h2>Final receipt</h2>
+            <FinalReceipt receipt={receipt} winner={winner} status={ui?.status} />
+          </article>
+        </div>
+        <article className="data-card">
+          <h2>Prize pool evidence</h2>
+          <PrizePoolEvidence ui={ui} receipt={receipt} />
+        </article>
+        <article className="data-card">
+          <h2>Round ledger</h2>
+          <RoundHistory history={history} players={players} />
+        </article>
+      </section>
+    </>
+  );
+}
 
-      <RoundTimeline total={Number(data?.totalRounds ?? 5)} current={Number(data?.round ?? 0)} history={data?.history ?? []} />
-    </section>
+function Champion({
+  player,
+  side,
+  balance,
+  thinking,
+  leading,
+  won,
+}: {
+  player?: Player;
+  side: "amber" | "blue";
+  balance: string;
+  thinking: boolean;
+  leading: boolean;
+  won: boolean;
+}) {
+  return (
+    <div className="champion">
+      <div className="champ-avatar-wrap">
+        <div className={cx("champ-aura", side)} />
+        <div className={cx("champ-avatar", side, won && "win")}>{initials(player?.name ?? player?.id)}</div>
+      </div>
+      <div className="champ-name">{player?.name ?? "Awaiting"}</div>
+      <div className="champ-handle">{shortHash(player?.walletAddress) || player?.id || "wallet pending"}</div>
+      <div className={cx("balance-plaque", side)}>
+        <span className={cx("plaque-gem", side)} />
+        <span className={cx("plaque-num", side)}>{balance}</span>
+      </div>
+      <div className="champ-status">
+        {thinking ? (
+          <span className={cx("sealing", side)}>
+            <span className={cx("spinner", side)} />
+            <span>sealing bid…</span>
+          </span>
+        ) : leading && !won ? (
+          <span className="ascendant">▲ ASCENDANT</span>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+function BidCard({
+  label,
+  side,
+  amount,
+  sealed,
+}: {
+  label: string;
+  side: "amber" | "blue";
+  amount?: number;
+  sealed: boolean;
+}) {
+  const showFace = !sealed && amount !== undefined;
+  return (
+    <div className="bid-col">
+      {showFace ? (
+        <div className={cx("bid-card", "face", side)}>
+          <span>{amount}</span>
+        </div>
+      ) : (
+        <div className={cx("bid-card", "back", side)}>
+          <span className="rune">
+            <i />
+          </span>
+        </div>
+      )}
+      <span className={cx("lbl", side)}>{label}</span>
+    </div>
+  );
+}
+
+function Chronicle({
+  messages,
+  players,
+  winner,
+  receipt,
+}: {
+  messages: Array<{ playerId: string; round: number; text: string; timestamp: string }>;
+  players: Player[];
+  winner?: string;
+  receipt?: MatchReceipt;
+}) {
+  const [left] = players;
+  const visible = messages.slice(-12);
+  return (
+    <div className="chronicle">
+      <div className="chronicle-head">
+        <span>The Chronicle</span>
+        <span className="chan">broadcast channel</span>
+      </div>
+      <div className="chronicle-feed sx">
+        {visible.length === 0 ? <EmptyState text="No broadcast messages returned by the backend yet." /> : null}
+        {visible.map((message) => {
+          const tone = message.playerId === left?.id ? "amber" : "blue";
+          return (
+            <div className="cmsg" key={`${message.playerId}-${message.timestamp}`}>
+              <span className={cx("chip", tone)}>{initials(playerName(players, message.playerId))}</span>
+              <div>
+                <div className={cx("who", tone)}>
+                  {playerName(players, message.playerId)} · round {message.round}
+                </div>
+                <div className="text">{message.text}</div>
+              </div>
+            </div>
+          );
+        })}
+        {receipt ? (
+          <div className="cmsg">
+            <span className="chip sys">✓</span>
+            <div>
+              <div className="who sys">Settlement</div>
+              <div className="text sys">
+                {winner ? `${playerName(players, winner)} settled on-chain.` : "Draw refund settled on-chain."}
+              </div>
+            </div>
+          </div>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+function RiteOfSettlement({
+  ui,
+  receipt,
+  winner,
+  players,
+}: {
+  ui?: MatchUiResponse;
+  receipt?: MatchReceipt;
+  winner?: string;
+  players: Player[];
+}) {
+  const data = ui?.render.data;
+  const archive = receipt?.archiveHash;
+  const pool = receipt?.totalPoolWei ?? data?.totalPoolWei ?? data?.stakeWei;
+  const payout =
+    receipt?.payoutTxHash ?? receipt?.refundTxHashes?.map((tx) => tx.txHash).filter(Boolean).join(" / ");
+  return (
+    <div className="rite">
+      <div className="rite-head">Rite of Settlement</div>
+      <div className="rite-rows">
+        <div className="rite-row">
+          <span className="k">Bid integrity</span>
+          <span className="v green">✓ sealed · refereed</span>
+        </div>
+        <div className="rite-row">
+          <span className="k">0G archive</span>
+          <span className="v">{archive ? shortHash(archive) : "pending"}</span>
+        </div>
+        <div className="rite-row">
+          <span className="k">Prize pool</span>
+          <span className="v amber">{pool ?? "pending"}</span>
+        </div>
+        <div className="rite-hr" />
+        {receipt ? (
+          <div className="rite-box done">
+            <div className="tag">✓ SETTLED ON-CHAIN</div>
+            <div className="big">{winner ? `${playerName(players, winner)} wins` : "Draw — both stakes refunded"}</div>
+            <div className="small">
+              {receipt.payoutAmountWei ? `Paid ${receipt.payoutAmountWei} wei · ` : ""}
+              {payout ? `tx ${shortHash(payout)}` : "settlement tx not returned"}
+            </div>
+          </div>
+        ) : (
+          <div className="rite-box pending">
+            <div className="tag">⏳ ESCROW LOCKED</div>
+            <div className="small">
+              Pool releases to the verified winner once the backend returns the final receipt.
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function Connect4LiveScreen(props: LiveProps) {
+  const { ui, data, players, winner, receipt, latestLogs, matchId, navigate, error, loading } = props;
+  const status = ui?.status ?? "waiting";
+  return (
+    <>
+      <section className="live">
+        <div className="live-head">
+          <div className="live-head-left">
+            <button className="crumb" onClick={() => navigate("/games/connect4")}>
+              Connect Four ›
+            </button>
+            <span className={cx("pill", status === "failed" ? "bad" : "hot")}>
+              <span className="dot sm rose blink" />
+              {status.toUpperCase()}
+            </span>
+            <span className="id">table {shortId(matchId)}</span>
+          </div>
+          <div className="live-head-right">
+            <button className="btn btn-primary btn-sm" onClick={() => navigate("/games/connect4")}>
+              Game detail
+            </button>
+            <button className="btn btn-ghost btn-sm" onClick={() => navigate("/games")}>
+              Arena
+            </button>
+          </div>
+        </div>
+
+        {error ? <StatusBanner tone="bad" label="Polling error" value={error} /> : null}
+        {ui?.runnerError ? <StatusBanner tone="bad" label="Agent runner error" value={ui.runnerError} /> : null}
+        {loading ? <StatusBanner tone="warn" label="Loading" value="Waiting for /match/:id/ui." /> : null}
+
+        <Connect4Stage data={data} players={players} winner={winner} status={status} receipt={receipt} />
+      </section>
+
+      <section className="evidence-section">
+        <div className="lower-grid">
+          <article className="data-card">
+            <h2>Settlement signals</h2>
+            <Connect4ProofStrip data={data} receipt={receipt} status={status} />
+          </article>
+          <article className="data-card">
+            <h2>Move timeline</h2>
+            <Connect4MoveList moves={data?.moves ?? []} players={players} expanded />
+          </article>
+          <article className="data-card">
+            <h2>Agents</h2>
+            <AgentGrid players={players} latestLogs={latestLogs} winner={winner} />
+          </article>
+        </div>
+        <article className="data-card">
+          <h2>Prize pool evidence</h2>
+          <PrizePoolEvidence ui={ui} receipt={receipt} />
+        </article>
+        <article className="data-card">
+          <h2>Final receipt</h2>
+          <FinalReceipt receipt={receipt} winner={winner} status={ui?.status} />
+        </article>
+      </section>
+    </>
   );
 }
 
@@ -563,322 +1136,169 @@ function Connect4Stage({
   winner,
   status,
   receipt,
-  agentLogs,
-  runnerError,
 }: {
   data?: MatchUiResponse["render"]["data"];
   players: Player[];
   winner?: string;
   status: string;
   receipt?: MatchReceipt;
-  agentLogs: AgentLog[];
-  runnerError?: string;
 }) {
   const board = data?.board ?? [];
+  const columns = Number(data?.columns ?? 7);
   const currentPlayer = data?.currentPlayer;
   const outcome = receipt?.outcome ?? data?.outcome ?? (winner ? "winner" : undefined);
   const winningCells = new Set((data?.winningCells ?? []).map((cell) => `${cell.row}:${cell.column}`));
   const lastMoveKey = data?.lastMove ? `${data.lastMove.row}:${data.lastMove.column}` : "";
-  const latestMove = data?.lastMove;
-  const latestLog = agentLogs.at(-1);
+  const settled = Boolean(receipt);
+  const [left, right] = players;
   const settlementTx =
     receipt?.payoutTxHash ?? receipt?.refundTxHashes?.map((tx) => tx.txHash).filter(Boolean).join(" / ");
 
+  const statusLabel =
+    outcome === "draw"
+      ? "Board filled — draw refund"
+      : winner
+        ? `${playerName(players, winner)} connects four`
+        : currentPlayer
+          ? `${playerName(players, currentPlayer)} to move`
+          : "Drop phase";
+
   return (
-    <section className={`connect4-stage ${outcome ? "complete" : ""}`}>
-      <div className="connect4-header">
-        <div>
-          <span className="eyebrow">Connect4</span>
-          <h1>{outcome === "draw" ? "Draw refund" : winner ? `${playerName(players, winner)} connects four` : "Drop phase"}</h1>
-        </div>
-        <div className="connect4-status">
-          <Metric label="Status" value={status} />
-          <Metric label="Turn" value={currentPlayer ? playerName(players, currentPlayer) : "pending"} />
-          <Metric label="Moves" value={String(data?.moveCount ?? 0)} />
-        </div>
-      </div>
-
-      <div className={`connect4-activity ${receipt ? "complete" : status === "failed" ? "failed" : ""}`}>
-        <div>
-          <span className="eyebrow">{connect4ActivityEyebrow(status, Boolean(receipt))}</span>
-          <strong>{connect4ActivityTitle(status, receipt, players, winner, currentPlayer, outcome)}</strong>
-          <p>{connect4ActivityDetail(status, receipt, players, latestMove, latestLog, runnerError)}</p>
-        </div>
-        <div className="connect4-mini-log">
-          <EvidenceRow
-            label="Last move"
-            value={
-              latestMove
-                ? `${playerName(players, latestMove.playerId)} dropped column ${latestMove.column}, row ${latestMove.row}`
-                : "pending first drop"
-            }
-          />
-          <EvidenceRow
-            label="Last inference"
-            value={
-              latestLog
-                ? `${playerName(players, latestLog.playerId)} / ${latestLog.inferenceMode} / ${latestLog.latencyMs} ms`
-                : "pending first agent turn"
-            }
-            tone={latestLog?.fallbackReason ? "warn" : latestLog ? "good" : undefined}
-          />
-        </div>
-      </div>
-
-      <div className="connect4-proof-strip" aria-label="Connect4 lifecycle evidence">
-        <Connect4Signal
-          label="Pool"
-          value={receipt || data?.fullyFunded ? "funded" : data?.fullyFunded === false ? "funding pending" : "pending"}
-          tone={receipt || data?.fullyFunded ? "good" : "warn"}
-        />
-        <Connect4Signal
-          label="Archive"
-          value={receipt?.archiveHash ? shortHash(receipt.archiveHash) : status === "archived" || status === "paid" ? status : "pending"}
-          tone={receipt?.archiveHash ? (receipt.archiveMode === "0g" ? "good" : "warn") : "warn"}
-        />
-        <Connect4Signal
-          label={receipt?.outcome === "draw" ? "Refund" : "Payout"}
-          value={settlementTx ? shortHash(settlementTx) : receipt ? "not returned" : "pending"}
-          tone={settlementTx ? "good" : receipt ? "bad" : "warn"}
-        />
-        <Connect4Signal
-          label="Receipt"
-          value={receipt ? `complete ${formatTime(receipt.completedAt)}` : status === "finished" || status === "archived" ? "settlement pending" : "pending"}
-          tone={receipt ? "good" : status === "finished" || status === "archived" ? "warn" : undefined}
-        />
-      </div>
-
-      <div className="connect4-layout">
-        <div className="connect4-board" style={{ "--columns": String(data?.columns ?? 7) } as React.CSSProperties}>
-          {board.length === 0 ? <EmptyState text="Board state pending from backend." /> : null}
-          {board.map((row, rowIndex) =>
-            row.map((cell, columnIndex) => {
-              const key = `${rowIndex}:${columnIndex}`;
-              const ownerIndex = players.findIndex((player) => player.id === cell);
-              return (
-                <div
-                  className={`connect4-slot ${cell ? `filled player-${ownerIndex}` : ""} ${lastMoveKey === key ? "last" : ""} ${winningCells.has(key) ? "winning" : ""}`}
-                  key={key}
-                >
-                  <span>{cell ? playerName(players, cell).slice(0, 1) : ""}</span>
-                </div>
-              );
-            }),
-          )}
-        </div>
-        <aside className="connect4-players">
-          {players.map((player, index) => (
-            <article
-              className={`connect4-player player-${index} ${currentPlayer === player.id ? "active" : ""} ${winner === player.id ? "winner" : ""}`}
-              key={player.id}
-            >
-              <span className="disc-swatch" />
-              <div>
-                <strong>{player.name || player.id}</strong>
-                <code>{player.walletAddress || "wallet pending"}</code>
-              </div>
-            </article>
-          ))}
-          <div className="valid-columns">
-            <span>Valid columns</span>
-            <strong>{data?.validColumns?.join(", ") || "pending"}</strong>
+    <>
+      <div className="c4-stage">
+        <Connect4Player player={left} side="amber" active={currentPlayer === left?.id && !settled} winner={winner === left?.id} />
+        <div className="c4-board-wrap">
+          <div className="c4-board" style={{ "--cols": columns } as React.CSSProperties}>
+            {board.length === 0
+              ? Array.from({ length: columns * 6 }, (_, index) => (
+                  <div className="c4-cell" key={`empty-${index}`}>
+                    <div className="c4-disc empty" />
+                  </div>
+                ))
+              : board.map((row, rowIndex) =>
+                  row.map((cell, columnIndex) => {
+                    const key = `${rowIndex}:${columnIndex}`;
+                    const ownerIndex = players.findIndex((player) => player.id === cell);
+                    const tone = ownerIndex === 0 ? "amber" : ownerIndex === 1 ? "blue" : "empty";
+                    return (
+                      <div className="c4-cell" key={key}>
+                        <div
+                          className={cx(
+                            "c4-disc",
+                            cell ? tone : "empty",
+                            lastMoveKey === key && "last",
+                            winningCells.has(key) && "winning",
+                            winner && cell && !winningCells.has(key) && "dim",
+                          )}
+                        />
+                      </div>
+                    );
+                  }),
+                )}
           </div>
-        </aside>
+        </div>
+        <Connect4Player player={right} side="blue" active={currentPlayer === right?.id && !settled} winner={winner === right?.id} right />
       </div>
-    </section>
-  );
-}
 
-function Connect4Signal({
-  label,
-  value,
-  tone,
-}: {
-  label: string;
-  value: string;
-  tone?: "good" | "warn" | "bad";
-}) {
-  return (
-    <div className={`connect4-signal ${tone ?? ""}`}>
-      <span>{label}</span>
-      <strong>{value}</strong>
-    </div>
-  );
-}
-
-function connect4ActivityEyebrow(status: string, hasReceipt: boolean): string {
-  if (hasReceipt) {
-    return "Settlement complete";
-  }
-  if (status === "finished" || status === "archived") {
-    return "Gameplay complete";
-  }
-  if (status === "active") {
-    return "Live turn";
-  }
-  if (status === "failed") {
-    return "Match failed";
-  }
-  return "Setup";
-}
-
-function connect4ActivityTitle(
-  status: string,
-  receipt: MatchReceipt | undefined,
-  players: Player[],
-  winner: string | undefined,
-  currentPlayer: string | undefined,
-  outcome: string | undefined,
-): string {
-  if (receipt) {
-    if (receipt.outcome === "draw") {
-      return "Match complete: draw refund settled";
-    }
-    return `Match complete: ${playerName(players, receipt.winner ?? winner ?? "winner")} won`;
-  }
-  if (outcome === "draw") {
-    return "Board filled: draw settlement pending";
-  }
-  if (winner) {
-    return `${playerName(players, winner)} won. Waiting for archive and payout evidence.`;
-  }
-  if (status === "active") {
-    return currentPlayer ? `Waiting for ${playerName(players, currentPlayer)} to drop` : "Waiting for next legal drop";
-  }
-  if (status === "failed") {
-    return "Backend reported a failed match";
-  }
-  return "Waiting for funding and activation";
-}
-
-function connect4ActivityDetail(
-  status: string,
-  receipt: MatchReceipt | undefined,
-  players: Player[],
-  latestMove: MatchUiResponse["render"]["data"]["lastMove"],
-  latestLog: AgentLog | undefined,
-  runnerError: string | undefined,
-): string {
-  if (runnerError) {
-    return runnerError;
-  }
-  if (receipt) {
-    const archive = shortHash(receipt.archiveHash);
-    const settlement =
-      receipt.payoutTxHash ??
-      receipt.refundTxHashes?.map((tx) => tx.txHash).filter(Boolean).join(" / ") ??
-      "settlement tx not returned";
-    return `Receipt returned with archive ${archive} and ${receipt.outcome === "draw" ? "refund" : "payout"} ${shortHash(settlement)}.`;
-  }
-  if (status === "finished" || status === "archived") {
-    return "The game engine has ended play. The backend has not returned the final receipt yet.";
-  }
-  const moveText = latestMove
-    ? `${playerName(players, latestMove.playerId)} last played column ${latestMove.column}, row ${latestMove.row}`
-    : "No moves have been accepted yet";
-  const logText = latestLog
-    ? `latest inference was ${latestLog.inferenceMode} from ${playerName(players, latestLog.playerId)}`
-    : "agent inference has not returned yet";
-  return `${moveText}; ${logText}.`;
-}
-
-function AgentDuelist({
-  player,
-  side,
-  message,
-  bidSubmitted,
-  revealedBid,
-  maxBalance,
-  winner,
-}: {
-  player?: Player;
-  side: "left" | "right";
-  message?: string;
-  bidSubmitted: boolean;
-  revealedBid?: number;
-  maxBalance: number;
-  winner: boolean;
-}) {
-  const balance = Number(player?.balance) || 0;
-  const width = `${Math.max(0, Math.min(100, (balance / maxBalance) * 100))}%`;
-  return (
-    <article className={`duelist ${side} ${winner ? "winner" : ""}`}>
-      <div className="avatar" aria-hidden="true">
-        <span>{player?.name?.slice(0, 1) ?? "?"}</span>
+      <div className="c4-statusbar">
+        <div className={cx("c4-status", (settled || winner) && "done")}>
+          <span className="lbl">{statusLabel}</span>
+          <span className="sub">
+            move {data?.moveCount ?? 0} / {columns * 6}
+          </span>
+        </div>
       </div>
-      <h2>{player?.name ?? "Awaiting agent"}</h2>
-      <code>{player?.walletAddress ?? "wallet pending"}</code>
-      <div className="balance-track">
-        <div className="balance-fill" style={{ width }} />
-      </div>
-      <strong className="balance-label">{formatMaybe(player?.balance)} tokens</strong>
-      <DialogueBubble text={message} side={side} />
-      <BidReveal submitted={bidSubmitted} amount={revealedBid} />
-    </article>
-  );
-}
 
-function TreasuryPot({
-  amount,
-  phase,
-  status,
-  winner,
-  lastRound,
-  players,
-}: {
-  amount?: number;
-  phase: string;
-  status: string;
-  winner?: string;
-  lastRound?: RoundSummary;
-  players: Player[];
-}) {
-  return (
-    <div className="treasury-pot">
-      <span className="pot-label">Treasury</span>
-      <strong>{formatMaybe(amount)}</strong>
-      <small>{status}</small>
-      {winner ? <div className="winner-banner">{winner} wins match</div> : null}
-      {!winner && lastRound ? (
-        <div className="round-result">
-          Round {lastRound.round}: {lastRound.winner ? `${playerName(players, lastRound.winner)} took ${lastRound.treasury}` : "split treasury"}
+      {receipt ? (
+        <div className="c4-win">
+          <div className="tag">✓ SETTLED ON-CHAIN · 0G ARCHIVED</div>
+          <div className="big">
+            {receipt.outcome === "draw"
+              ? `Draw — both stakes refunded${settlementTx ? ` · tx ${shortHash(settlementTx)}` : ""}`
+              : `${playerName(players, receipt.winner ?? winner ?? "winner")} wins${
+                  receipt.payoutTxHash ? ` · tx ${shortHash(receipt.payoutTxHash)}` : ""
+                }`}
+          </div>
+        </div>
+      ) : status === "failed" ? (
+        <div className="c4-win" style={{ background: "rgba(232,120,138,0.07)", borderColor: "rgba(232,120,138,0.25)" }}>
+          <div className="tag" style={{ color: "var(--rose)" }}>
+            ✗ MATCH FAILED
+          </div>
+          <div className="big">The backend reported a failed match.</div>
         </div>
       ) : null}
-      <div className="phase-orbit">{phase}</div>
+    </>
+  );
+}
+
+function Connect4Player({
+  player,
+  side,
+  active,
+  winner,
+  right,
+}: {
+  player?: Player;
+  side: "amber" | "blue";
+  active: boolean;
+  winner: boolean;
+  right?: boolean;
+}) {
+  return (
+    <div className={cx("c4-player", right && "right", (active || winner) && `turn-${side}`)}>
+      <div className="pid">
+        <span className={cx("av", side)}>{initials(player?.name ?? player?.id)}</span>
+        <div>
+          <b>{player?.name ?? "Awaiting agent"}</b>
+          <small>{shortHash(player?.walletAddress) || player?.id || "wallet pending"}</small>
+        </div>
+      </div>
+      {active ? (
+        <div className={cx("c4-think", side)}>
+          <span className={cx("spinner", side)} />
+          <span>searching…</span>
+        </div>
+      ) : null}
     </div>
   );
 }
 
-function DialogueBubble({ text, side }: { text?: string; side: "left" | "right" }) {
+function Connect4ProofStrip({
+  data,
+  receipt,
+  status,
+}: {
+  data?: MatchUiResponse["render"]["data"];
+  receipt?: MatchReceipt;
+  status: string;
+}) {
+  const settlementTx =
+    receipt?.payoutTxHash ?? receipt?.refundTxHashes?.map((tx) => tx.txHash).filter(Boolean).join(" / ");
   return (
-    <div className={`dialogue-bubble ${side}`}>
-      {text ? <p>{text}</p> : <p className="muted-line">broadcast pending</p>}
-    </div>
-  );
-}
-
-function BidReveal({ submitted, amount }: { submitted: boolean; amount?: number }) {
-  const revealed = amount !== undefined;
-  return (
-    <div className={`stage-bid ${revealed ? "revealed" : submitted ? "submitted" : ""}`}>
-      <span>{revealed ? "revealed bid" : submitted ? "hidden bid locked" : "waiting bid"}</span>
-      <strong>{revealed ? amount : submitted ? "??" : "--"}</strong>
-    </div>
-  );
-}
-
-function RoundTimeline({ total, current, history }: { total: number; current: number; history: RoundSummary[] }) {
-  return (
-    <div className="round-timeline">
-      {Array.from({ length: total }, (_, index) => {
-        const round = index + 1;
-        const done = history.some((item) => item.round === round);
-        return (
-          <span key={round} className={done ? "done" : round === current ? "active" : ""}>
-            {round}
-          </span>
-        );
-      })}
+    <div className="evidence-grid">
+      <EvidenceRow
+        label="Pool"
+        value={receipt || data?.fullyFunded ? "funded" : data?.fullyFunded === false ? "funding pending" : "pending"}
+        tone={receipt || data?.fullyFunded ? "good" : "warn"}
+      />
+      <EvidenceRow
+        label="Archive"
+        value={receipt?.archiveHash ? shortHash(receipt.archiveHash) : status === "archived" || status === "paid" ? status : "pending"}
+        mono
+        tone={receipt?.archiveHash ? (receipt.archiveMode === "0g" ? "good" : "warn") : "warn"}
+      />
+      <EvidenceRow
+        label={receipt?.outcome === "draw" ? "Refund" : "Payout"}
+        value={settlementTx ? shortHash(settlementTx) : receipt ? "not returned" : "pending"}
+        mono
+        tone={settlementTx ? "good" : receipt ? "bad" : "warn"}
+      />
+      <EvidenceRow
+        label="Receipt"
+        value={receipt ? `complete ${formatTime(receipt.completedAt)}` : status === "finished" || status === "archived" ? "settlement pending" : "pending"}
+        tone={receipt ? "good" : status === "finished" || status === "archived" ? "warn" : undefined}
+      />
     </div>
   );
 }
@@ -905,13 +1325,13 @@ function AgentGrid({
 function AgentCard({ player, latestLog, winner }: { player: Player; latestLog?: AgentLog; winner: boolean }) {
   const mode = latestLog?.inferenceMode ?? player.inferenceMode ?? player.agentKind ?? "pending";
   return (
-    <article className={`agent-card ${winner ? "winner" : ""}`}>
+    <article className={cx("agent-card", winner && "winner")}>
       <div className="agent-top">
         <div>
           <h3>{player.name || player.id}</h3>
           <small>{player.id}</small>
         </div>
-        <span className={mode === "0g-serving" ? "pill good" : "pill warn"}>{mode}</span>
+        <span className={cx("pill", mode === "0g-serving" ? "good" : "warn")}>{mode}</span>
       </div>
       <EvidenceRow label="Wallet" value={player.walletAddress || "pending"} mono />
       <EvidenceRow label="Balance" value={formatMaybe(player.balance)} />
@@ -947,38 +1367,12 @@ function PrizePoolEvidence({ ui, receipt }: { ui?: MatchUiResponse; receipt?: Ma
       {data?.payoutError ? <StatusBanner tone="bad" label="Payout failure" value={data.payoutError} /> : null}
       {data?.prizePoolError ? <StatusBanner tone="bad" label="PrizePool read failure" value={data.prizePoolError} /> : null}
       <div className="tx-list">
-        <h3>Funding Transactions</h3>
+        <h3>Funding transactions</h3>
         {funding.length === 0 ? <EmptyState text="Funding transaction hashes pending from backend." /> : null}
         {funding.map((tx) => (
           <FundingRow key={`${tx.playerId}-${tx.txHash}`} tx={tx} />
         ))}
       </div>
-    </div>
-  );
-}
-
-function Broadcasts({
-  messages,
-  players,
-}: {
-  messages: Array<{ playerId: string; round: number; text: string; timestamp: string }>;
-  players: Player[];
-}) {
-  const currentRound = Math.max(0, ...messages.map((message) => message.round));
-  const visible = messages.filter((message) => message.round === currentRound).slice(-4);
-  return (
-    <div className="broadcasts">
-      <h3>Broadcasts</h3>
-      {visible.length === 0 ? <EmptyState text="No broadcast messages for the current round yet." /> : null}
-      {visible.map((message) => (
-        <div className="bubble" key={`${message.playerId}-${message.timestamp}`}>
-          <strong>{playerName(players, message.playerId)}</strong>
-          <p>{message.text}</p>
-          <small>
-            Round {message.round} / {new Date(message.timestamp).toLocaleTimeString()}
-          </small>
-        </div>
-      ))}
     </div>
   );
 }
@@ -995,12 +1389,15 @@ function BidStatus({
   const revealed = new Map(revealedBids.map((bid) => [bid.playerId, bid.amount]));
   return (
     <div className="bid-grid">
-      <h3>Bids</h3>
       {pendingBids.length === 0 ? <EmptyState text="Bid status pending from backend." /> : null}
       {pendingBids.map((bid) => (
-        <div className="bid-card" key={bid.playerId}>
+        <div className="bid-card-data" key={bid.playerId}>
           <span>{playerName(players, bid.playerId)}</span>
-          {revealed.has(bid.playerId) ? <strong>Revealed: {revealed.get(bid.playerId)}</strong> : <strong>{bid.submitted ? "Submitted, hidden" : "Waiting for bid"}</strong>}
+          {revealed.has(bid.playerId) ? (
+            <strong>Revealed: {revealed.get(bid.playerId)}</strong>
+          ) : (
+            <strong>{bid.submitted ? "Submitted, hidden" : "Waiting for bid"}</strong>
+          )}
         </div>
       ))}
     </div>
@@ -1065,7 +1462,7 @@ function FinalReceipt({ receipt, winner, status }: { receipt?: MatchReceipt; win
       <div className="receipt-pending">
         <EvidenceRow label="Winner" value={winner ?? "pending"} />
         <EvidenceRow label="Receipt status" value={status ?? "pending"} />
-        <EmptyState text="Final receipt is pending. Archive hash, payout tx, and inference summary will stay empty until the backend returns them." />
+        <EmptyState text="Final receipt is pending. Archive hash, payout tx, and inference summary stay empty until the backend returns them." />
       </div>
     );
   }
@@ -1084,18 +1481,18 @@ function FinalReceipt({ receipt, winner, status }: { receipt?: MatchReceipt; win
       <EvidenceRow label="Completed" value={receipt.completedAt} />
       {receipt.refundTxHashes && receipt.refundTxHashes.length > 0 ? (
         <div className="tx-list">
-          <h3>Draw Refund Transactions</h3>
+          <h3>Draw refund transactions</h3>
           {receipt.refundTxHashes.map((tx) => (
             <FundingRow key={`${tx.playerId}-${tx.txHash}`} tx={tx} />
           ))}
         </div>
       ) : null}
       <div className="tx-list">
-        <h3>Per-Agent Inference Summary</h3>
+        <h3>Per-agent inference summary</h3>
         {receipt.agentInference.map((item) => (
           <div className="summary-row" key={item.playerId}>
             <strong>{item.playerId}</strong>
-            <span className={item.mode === "0g-serving" ? "pill good" : "pill warn"}>{item.mode}</span>
+            <span className={cx("pill", item.mode === "0g-serving" ? "good" : "warn")}>{item.mode}</span>
             <span>{item.turns} turns</span>
             <span>{item.fallbackTurns} fallback</span>
             <code>{item.walletAddress}</code>
@@ -1108,26 +1505,14 @@ function FinalReceipt({ receipt, winner, status }: { receipt?: MatchReceipt; win
 
 function InfoList({ title, items }: { title: string; items: string[] }) {
   return (
-    <article className="info-panel">
+    <article className="data-card">
       <h2>{title}</h2>
-      <ul>
+      <ul className="docs-list">
         {items.map((item) => (
           <li key={item}>{item}</li>
         ))}
       </ul>
     </article>
-  );
-}
-
-function PlatformHeader({ eyebrow, title, action }: { eyebrow: string; title: string; action?: React.ReactNode }) {
-  return (
-    <header className="platform-header">
-      <div>
-        <div className="eyebrow">{eyebrow}</div>
-        <h1>{title}</h1>
-      </div>
-      {action}
-    </header>
   );
 }
 
@@ -1138,15 +1523,6 @@ function FundingRow({ tx }: { tx: FundingTxReceipt }) {
       <code>{tx.txHash}</code>
       <span>{tx.amountWei} wei</span>
       <small>{tx.walletAddress}</small>
-    </div>
-  );
-}
-
-function Metric({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="metric">
-      <span>{label}</span>
-      <strong>{value}</strong>
     </div>
   );
 }
@@ -1163,7 +1539,7 @@ function EvidenceRow({
   tone?: "good" | "warn" | "bad";
 }) {
   return (
-    <div className={`evidence-row ${tone ?? ""}`}>
+    <div className={cx("evidence-row", tone)}>
       <span>{label}</span>
       <strong className={mono ? "mono" : undefined}>{value}</strong>
     </div>
@@ -1172,7 +1548,7 @@ function EvidenceRow({
 
 function StatusBanner({ label, value, tone }: { label: string; value: string; tone: "good" | "warn" | "bad" }) {
   return (
-    <div className={`status-banner ${tone}`}>
+    <div className={cx("status-banner", tone)}>
       <strong>{label}</strong>
       <span>{value}</span>
     </div>
@@ -1181,6 +1557,160 @@ function StatusBanner({ label, value, tone }: { label: string; value: string; to
 
 function EmptyState({ text }: { text: string }) {
   return <div className="empty-state">{text}</div>;
+}
+
+/* ============================ icons ============================ */
+
+const IconHome = (
+  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M3 10.5 12 3l9 7.5" />
+    <path d="M5 9.5V20h14V9.5" />
+  </svg>
+);
+const IconGrid = (
+  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+    <rect x="3" y="3" width="7" height="7" rx="1.5" />
+    <rect x="14" y="3" width="7" height="7" rx="1.5" />
+    <rect x="3" y="14" width="7" height="7" rx="1.5" />
+    <rect x="14" y="14" width="7" height="7" rx="1.5" />
+  </svg>
+);
+const IconGridBlue = (
+  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#3E8BFF" strokeWidth="1.8">
+    <rect x="3" y="3" width="7" height="7" rx="1.5" />
+    <rect x="14" y="3" width="7" height="7" rx="1.5" />
+    <rect x="3" y="14" width="7" height="7" rx="1.5" />
+    <rect x="14" y="14" width="7" height="7" rx="1.5" />
+  </svg>
+);
+const IconCards = (
+  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#F0B45C" strokeWidth="1.7">
+    <rect x="3.5" y="6.5" width="10" height="13" rx="2" transform="rotate(-9 8.5 13)" />
+    <rect x="10.5" y="4.5" width="10" height="13" rx="2" transform="rotate(9 15.5 11)" />
+  </svg>
+);
+const IconTarget = (
+  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#7DA2FF" strokeWidth="1.7">
+    <circle cx="12" cy="12" r="8.5" />
+    <circle cx="12" cy="12" r="3.2" />
+  </svg>
+);
+const IconPoker = (
+  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#A78BFA" strokeWidth="1.7" opacity="0.4">
+    <circle cx="12" cy="12" r="8.5" />
+    <path d="M12 8v8M8 12h8" strokeWidth="1.4" />
+  </svg>
+);
+const IconDoc = (
+  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round">
+    <path d="M7 3h7l4 4v14H7z" />
+    <path d="M14 3v4h4" />
+    <path d="M10 13h6M10 17h4" />
+  </svg>
+);
+const IconChart = (
+  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+    <path d="M5 21V10" />
+    <path d="M12 21V3" />
+    <path d="M19 21v-8" />
+  </svg>
+);
+const IconSearch = (
+  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#4A6070" strokeWidth="2.2" strokeLinecap="round">
+    <circle cx="11" cy="11" r="7" />
+    <path d="m20 20-3.4-3.4" />
+  </svg>
+);
+const IconWallet = (
+  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9">
+    <rect x="3" y="6" width="18" height="13" rx="2.5" />
+    <path d="M3 10h18" />
+    <circle cx="17" cy="14.5" r="1.1" fill="currentColor" stroke="none" />
+  </svg>
+);
+
+/* ============================ helpers ============================ */
+
+function cx(...values: Array<string | false | undefined | null>): string {
+  return values.filter(Boolean).join(" ");
+}
+
+function initials(name?: string): string {
+  if (!name) {
+    return "??";
+  }
+  const trimmed = name.trim();
+  const parts = trimmed.split(/\s+/);
+  if (parts.length >= 2 && parts[0] && parts[1]) {
+    return (parts[0][0] + parts[1][0]).toUpperCase();
+  }
+  return trimmed.slice(0, 2).toUpperCase();
+}
+
+function shortId(value: string): string {
+  if (!value) {
+    return "—";
+  }
+  return value.length <= 10 ? value : `#${value.slice(-6)}`;
+}
+
+function matchVersus(match: MatchSummary): ReactNode {
+  const names = match.players.map((player) => player.name || player.id);
+  if (names.length === 0) {
+    return "players pending";
+  }
+  return names.reduce<ReactNode[]>((acc, name, index) => {
+    if (index > 0) {
+      acc.push(<span key={`vs-${index}`}> vs </span>);
+    }
+    acc.push(name);
+    return acc;
+  }, []);
+}
+
+function roundResultLabel(round: RoundSummary | undefined, players: Player[]): string {
+  if (!round) {
+    return "Reveal pending";
+  }
+  if (!round.winner) {
+    return `Round ${round.round}: treasury rolls over`;
+  }
+  return `Round ${round.round}: ${playerName(players, round.winner)} takes ${round.treasury}`;
+}
+
+function toRoman(value: number): string {
+  if (!value || value < 1) {
+    return "I";
+  }
+  const table: Array<[number, string]> = [
+    [10, "X"],
+    [9, "IX"],
+    [5, "V"],
+    [4, "IV"],
+    [1, "I"],
+  ];
+  let remaining = value;
+  let result = "";
+  for (const [num, sym] of table) {
+    while (remaining >= num) {
+      result += sym;
+      remaining -= num;
+    }
+  }
+  return result;
+}
+
+function liveStatusStyle(status: MatchStatus): { color: string; bg: string } {
+  switch (status) {
+    case "active":
+      return { color: "#25E08A", bg: "rgba(37,224,138,0.12)" };
+    case "waiting":
+      return { color: "#F0B45C", bg: "rgba(240,180,92,0.12)" };
+    case "failed":
+      return { color: "#E8788A", bg: "rgba(232,120,138,0.12)" };
+    default:
+      return { color: "#7DA2FF", bg: "rgba(125,162,255,0.12)" };
+  }
 }
 
 function parseRoute(): Route {
@@ -1202,16 +1732,6 @@ function parseRoute(): Route {
     return { name: "games" };
   }
   return { name: "landing" };
-}
-
-function latestMessageFor(
-  messages: Array<{ playerId: string; round: number; text: string; timestamp: string }>,
-  playerId?: string,
-): string | undefined {
-  if (!playerId) {
-    return undefined;
-  }
-  return [...messages].reverse().find((message) => message.playerId === playerId)?.text;
 }
 
 function bidSubmitted(bids: Array<{ playerId: string; submitted: boolean }>, playerId?: string): boolean {
@@ -1268,12 +1788,12 @@ function formatMaybe(value: unknown): string {
 
 function shortHash(value?: string): string {
   if (!value) {
-    return "pending";
+    return "";
   }
   if (value.length <= 18) {
     return value;
   }
-  return `${value.slice(0, 10)}...${value.slice(-6)}`;
+  return `${value.slice(0, 6)}…${value.slice(-4)}`;
 }
 
 function formatTime(value?: string): string {
@@ -1291,12 +1811,67 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-function gameDescription(gameId: string, name: string): string {
+function gameLabel(gameId: string): string {
   if (gameId === "sovereign-bluff") {
-    return "Five rounds of broadcasts, hidden bids, treasury swings, and final payout evidence.";
+    return "Sovereign Bluff";
   }
   if (gameId === "connect4") {
-    return "A 7x6 disc-dropping duel with four-in-a-row wins and draw refund settlement.";
+    return "Connect Four";
+  }
+  return gameId;
+}
+
+function gameTag(gameId: string): string {
+  if (gameId === "sovereign-bluff") {
+    return "PSYCHOLOGICAL · SEALED BID";
+  }
+  if (gameId === "connect4") {
+    return "PERFECT INFO · DETERMINISTIC";
+  }
+  return "REFEREED GAME";
+}
+
+function accentRaw(gameId: string): string {
+  if (gameId === "sovereign-bluff") {
+    return "#F0B45C";
+  }
+  if (gameId === "connect4") {
+    return "#7DA2FF";
+  }
+  return "#A78BFA";
+}
+
+function tileTheme(gameId: string): { bg: string; glow: string; color: string; mono: string } {
+  if (gameId === "sovereign-bluff") {
+    return {
+      bg: "linear-gradient(160deg,#1f1606,#0f1f2b)",
+      glow: "rgba(240,180,92,0.4)",
+      color: "#F0B45C",
+      mono: "SB",
+    };
+  }
+  if (gameId === "connect4") {
+    return {
+      bg: "linear-gradient(160deg,#0a1730,#0f1f2b)",
+      glow: "rgba(62,139,255,0.4)",
+      color: "#7DA2FF",
+      mono: "C4",
+    };
+  }
+  return {
+    bg: "linear-gradient(160deg,#170f2a,#0f1f2b)",
+    glow: "rgba(167,139,250,0.4)",
+    color: "#A78BFA",
+    mono: gameId.slice(0, 2).toUpperCase(),
+  };
+}
+
+function gameDescription(gameId: string, name: string): string {
+  if (gameId === "sovereign-bluff") {
+    return "A five-round sealed-bid duel. Bluff in the open, commit in the dark, reveal and pay. Nerve beats math.";
+  }
+  if (gameId === "connect4") {
+    return "The classic, refereed. Every move sealed, validated, and archived. Four in a row takes the pool; a draw refunds both stakes.";
   }
   return `${name} is listed by the backend registry. Extra metadata is not exposed yet.`;
 }
