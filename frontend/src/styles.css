@@ -586,6 +586,13 @@ code {
   padding: 18px;
 }
 
+.connect4-stage.complete {
+  border-color: rgba(56, 255, 200, 0.78);
+  box-shadow:
+    0 0 0 1px rgba(56, 255, 200, 0.2) inset,
+    0 0 36px rgba(56, 255, 200, 0.14);
+}
+
 .connect4-header,
 .connect4-layout {
   display: grid;
@@ -607,6 +614,88 @@ code {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
+}
+
+.connect4-activity {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 520px);
+  gap: 14px;
+  align-items: stretch;
+  border: 1px solid rgba(132, 153, 147, 0.24);
+  border-radius: 8px;
+  background:
+    linear-gradient(90deg, rgba(9, 30, 34, 0.96), rgba(9, 14, 17, 0.92)),
+    #071113;
+  padding: 14px;
+}
+
+.connect4-activity.complete {
+  border-color: rgba(56, 255, 200, 0.68);
+  background:
+    linear-gradient(90deg, rgba(7, 52, 42, 0.95), rgba(9, 16, 16, 0.92)),
+    #071113;
+}
+
+.connect4-activity.failed {
+  border-color: rgba(255, 125, 125, 0.68);
+}
+
+.connect4-activity strong {
+  display: block;
+  margin-top: 4px;
+  color: #ffffff;
+  font-size: clamp(22px, 3vw, 38px);
+  line-height: 1.05;
+}
+
+.connect4-activity p {
+  margin: 8px 0 0;
+  color: #c8dbd7;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.connect4-mini-log {
+  display: grid;
+  gap: 8px;
+}
+
+.connect4-proof-strip {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.connect4-signal {
+  border-top: 3px solid rgba(132, 153, 147, 0.36);
+  border-radius: 6px;
+  background: rgba(2, 8, 11, 0.62);
+  padding: 10px;
+}
+
+.connect4-signal.good {
+  border-top-color: #38ffc8;
+}
+
+.connect4-signal.warn {
+  border-top-color: #f0d86a;
+}
+
+.connect4-signal.bad {
+  border-top-color: #ff7d7d;
+}
+
+.connect4-signal span {
+  display: block;
+  color: #7f9691;
+  font-size: 11px;
+  text-transform: uppercase;
+}
+
+.connect4-signal strong {
+  display: block;
+  margin-top: 4px;
+  overflow-wrap: anywhere;
 }
 
 .connect4-layout {
@@ -732,9 +821,16 @@ code {
   gap: 10px;
 }
 
-.game-evidence-layout {
+.game-evidence-layout,
+.sovereign-screen-layout,
+.connect4-screen-layout {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.settlement-stack {
+  display: grid;
   gap: 14px;
 }
 
@@ -966,8 +1062,12 @@ code {
   .detail-band,
   .info-grid,
   .connect4-header,
+  .connect4-activity,
+  .connect4-proof-strip,
   .connect4-layout,
   .game-evidence-layout,
+  .sovereign-screen-layout,
+  .connect4-screen-layout,
   .active-match-card {
     grid-template-columns: 1fr;
   }

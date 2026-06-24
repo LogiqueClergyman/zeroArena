@@ -349,51 +349,116 @@ function LiveGamePage({ matchId, navigate }: { matchId: string; navigate: (to: s
       {loading ? <StatusBanner tone="warn" label="Loading" value="Waiting for /match/:id/ui." /> : null}
 
       {ui?.gameId === "connect4" ? (
-        <Connect4Stage data={data} players={players} winner={winner} status={ui?.status ?? "waiting"} />
+        <Connect4LiveScreen
+          ui={ui}
+          data={data}
+          players={players}
+          winner={winner}
+          receipt={receipt}
+          latestLogs={latestLogs}
+        />
       ) : (
-        <SovereignBluffStage data={data} players={players} winner={winner} status={ui?.status ?? "waiting"} />
+        <SovereignBluffLiveScreen
+          ui={ui}
+          data={data}
+          players={players}
+          winner={winner}
+          receipt={receipt}
+          latestLogs={latestLogs}
+        />
       )}
+    </section>
+  );
+}
 
-      <section className="game-evidence-layout">
+function SovereignBluffLiveScreen({
+  ui,
+  data,
+  players,
+  winner,
+  receipt,
+  latestLogs,
+}: {
+  ui?: MatchUiResponse;
+  data?: MatchUiResponse["render"]["data"];
+  players: Player[];
+  winner?: string;
+  receipt?: MatchReceipt;
+  latestLogs: Map<string, AgentLog>;
+}) {
+  return (
+    <>
+      <SovereignBluffStage data={data} players={players} winner={winner} status={ui?.status ?? "waiting"} />
+      <section className="sovereign-screen-layout">
         <div className="game-side">
           <h2>Agents</h2>
-          <div className="agent-grid">
-            {players.length === 0 ? <EmptyState text="Agent data pending from backend." /> : null}
-            {players.map((player) => (
-              <AgentCard key={player.id} player={player} latestLog={latestLogs.get(player.id)} winner={winner === player.id} />
-            ))}
+          <AgentGrid players={players} latestLogs={latestLogs} winner={winner} />
+        </div>
+        <div className="game-side">
+          <h2>Live Round</h2>
+          <Broadcasts messages={data?.messages ?? []} players={players} />
+          <BidStatus pendingBids={data?.pendingBids ?? []} revealedBids={data?.revealedBids ?? []} players={players} />
+        </div>
+        <div className="game-side">
+          <h2>Settlement Evidence</h2>
+          <div className="settlement-stack">
+            <PrizePoolEvidence ui={ui} receipt={receipt} />
+            <FinalReceipt receipt={receipt} winner={winner} status={ui?.status} />
           </div>
         </div>
-        <div className="game-side">
-          <h2>Current Round</h2>
-          {ui?.gameId === "connect4" ? (
-            <Connect4MoveList moves={data?.moves ?? []} players={players} />
-          ) : (
-            <>
-              <Broadcasts messages={data?.messages ?? []} players={players} />
-              <BidStatus pendingBids={data?.pendingBids ?? []} revealedBids={data?.revealedBids ?? []} players={players} />
-            </>
-          )}
-        </div>
-        <div className="game-side">
-          <h2>0G And Payout Evidence</h2>
-          <PrizePoolEvidence ui={ui} receipt={receipt} />
-        </div>
       </section>
+      <section className="game-wide">
+        <h2>Round Ledger</h2>
+        <RoundHistory history={data?.history ?? []} players={players} />
+      </section>
+    </>
+  );
+}
 
-      <section className="game-wide">
-        <h2>Round History</h2>
-        {ui?.gameId === "connect4" ? (
+function Connect4LiveScreen({
+  ui,
+  data,
+  players,
+  winner,
+  receipt,
+  latestLogs,
+}: {
+  ui?: MatchUiResponse;
+  data?: MatchUiResponse["render"]["data"];
+  players: Player[];
+  winner?: string;
+  receipt?: MatchReceipt;
+  latestLogs: Map<string, AgentLog>;
+}) {
+  return (
+    <>
+      <Connect4Stage
+        data={data}
+        players={players}
+        winner={winner}
+        status={ui?.status ?? "waiting"}
+        receipt={receipt}
+        agentLogs={ui?.agentLogs ?? []}
+        runnerError={ui?.runnerError}
+      />
+      <section className="connect4-screen-layout">
+        <div className="game-side">
+          <h2>Move Timeline</h2>
           <Connect4MoveList moves={data?.moves ?? []} players={players} expanded />
-        ) : (
-          <RoundHistory history={data?.history ?? []} players={players} />
-        )}
+        </div>
+        <div className="game-side">
+          <h2>Agents</h2>
+          <AgentGrid players={players} latestLogs={latestLogs} winner={winner} />
+        </div>
+        <div className="game-side">
+          <h2>Settlement Evidence</h2>
+          <div className="settlement-stack">
+            <PrizePoolEvidence ui={ui} receipt={receipt} />
+            <FinalReceipt receipt={receipt} winner={winner} status={ui?.status} />
+          </div>
+        </div>
       </section>
-      <section className="game-wide">
-        <h2>Final Receipt</h2>
-        <FinalReceipt receipt={receipt} winner={winner} status={ui?.status} />
-      </section>
-    </section>
+    </>
   );
 }
 
@@ -469,17 +534,27 @@ function Connect4Stage({
   players,
   winner,
   status,
+  receipt,
+  agentLogs,
+  runnerError,
 }: {
   data?: MatchUiResponse["render"]["data"];
   players: Player[];
   winner?: string;
   status: string;
+  receipt?: MatchReceipt;
+  agentLogs: AgentLog[];
+  runnerError?: string;
 }) {
   const board = data?.board ?? [];
   const currentPlayer = data?.currentPlayer;
-  const outcome = data?.outcome ?? (winner ? "winner" : undefined);
+  const outcome = receipt?.outcome ?? data?.outcome ?? (winner ? "winner" : undefined);
   const winningCells = new Set((data?.winningCells ?? []).map((cell) => `${cell.row}:${cell.column}`));
   const lastMoveKey = data?.lastMove ? `${data.lastMove.row}:${data.lastMove.column}` : "";
+  const latestMove = data?.lastMove;
+  const latestLog = agentLogs.at(-1);
+  const settlementTx =
+    receipt?.payoutTxHash ?? receipt?.refundTxHashes?.map((tx) => tx.txHash).filter(Boolean).join(" / ");
 
   return (
     <section className={`connect4-stage ${outcome ? "complete" : ""}`}>
@@ -493,6 +568,56 @@ function Connect4Stage({
           <Metric label="Turn" value={currentPlayer ? playerName(players, currentPlayer) : "pending"} />
           <Metric label="Moves" value={String(data?.moveCount ?? 0)} />
         </div>
+      </div>
+
+      <div className={`connect4-activity ${receipt ? "complete" : status === "failed" ? "failed" : ""}`}>
+        <div>
+          <span className="eyebrow">{connect4ActivityEyebrow(status, Boolean(receipt))}</span>
+          <strong>{connect4ActivityTitle(status, receipt, players, winner, currentPlayer, outcome)}</strong>
+          <p>{connect4ActivityDetail(status, receipt, players, latestMove, latestLog, runnerError)}</p>
+        </div>
+        <div className="connect4-mini-log">
+          <EvidenceRow
+            label="Last move"
+            value={
+              latestMove
+                ? `${playerName(players, latestMove.playerId)} dropped column ${latestMove.column}, row ${latestMove.row}`
+                : "pending first drop"
+            }
+          />
+          <EvidenceRow
+            label="Last inference"
+            value={
+              latestLog
+                ? `${playerName(players, latestLog.playerId)} / ${latestLog.inferenceMode} / ${latestLog.latencyMs} ms`
+                : "pending first agent turn"
+            }
+            tone={latestLog?.fallbackReason ? "warn" : latestLog ? "good" : undefined}
+          />
+        </div>
+      </div>
+
+      <div className="connect4-proof-strip" aria-label="Connect4 lifecycle evidence">
+        <Connect4Signal
+          label="Pool"
+          value={receipt || data?.fullyFunded ? "funded" : data?.fullyFunded === false ? "funding pending" : "pending"}
+          tone={receipt || data?.fullyFunded ? "good" : "warn"}
+        />
+        <Connect4Signal
+          label="Archive"
+          value={receipt?.archiveHash ? shortHash(receipt.archiveHash) : status === "archived" || status === "paid" ? status : "pending"}
+          tone={receipt?.archiveHash ? (receipt.archiveMode === "0g" ? "good" : "warn") : "warn"}
+        />
+        <Connect4Signal
+          label={receipt?.outcome === "draw" ? "Refund" : "Payout"}
+          value={settlementTx ? shortHash(settlementTx) : receipt ? "not returned" : "pending"}
+          tone={settlementTx ? "good" : receipt ? "bad" : "warn"}
+        />
+        <Connect4Signal
+          label="Receipt"
+          value={receipt ? `complete ${formatTime(receipt.completedAt)}` : status === "finished" || status === "archived" ? "settlement pending" : "pending"}
+          tone={receipt ? "good" : status === "finished" || status === "archived" ? "warn" : undefined}
+        />
       </div>
 
       <div className="connect4-layout">
@@ -534,6 +659,99 @@ function Connect4Stage({
       </div>
     </section>
   );
+}
+
+function Connect4Signal({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: string;
+  tone?: "good" | "warn" | "bad";
+}) {
+  return (
+    <div className={`connect4-signal ${tone ?? ""}`}>
+      <span>{label}</span>
+      <strong>{value}</strong>
+    </div>
+  );
+}
+
+function connect4ActivityEyebrow(status: string, hasReceipt: boolean): string {
+  if (hasReceipt) {
+    return "Settlement complete";
+  }
+  if (status === "finished" || status === "archived") {
+    return "Gameplay complete";
+  }
+  if (status === "active") {
+    return "Live turn";
+  }
+  if (status === "failed") {
+    return "Match failed";
+  }
+  return "Setup";
+}
+
+function connect4ActivityTitle(
+  status: string,
+  receipt: MatchReceipt | undefined,
+  players: Player[],
+  winner: string | undefined,
+  currentPlayer: string | undefined,
+  outcome: string | undefined,
+): string {
+  if (receipt) {
+    if (receipt.outcome === "draw") {
+      return "Match complete: draw refund settled";
+    }
+    return `Match complete: ${playerName(players, receipt.winner ?? winner ?? "winner")} won`;
+  }
+  if (outcome === "draw") {
+    return "Board filled: draw settlement pending";
+  }
+  if (winner) {
+    return `${playerName(players, winner)} won. Waiting for archive and payout evidence.`;
+  }
+  if (status === "active") {
+    return currentPlayer ? `Waiting for ${playerName(players, currentPlayer)} to drop` : "Waiting for next legal drop";
+  }
+  if (status === "failed") {
+    return "Backend reported a failed match";
+  }
+  return "Waiting for funding and activation";
+}
+
+function connect4ActivityDetail(
+  status: string,
+  receipt: MatchReceipt | undefined,
+  players: Player[],
+  latestMove: MatchUiResponse["render"]["data"]["lastMove"],
+  latestLog: AgentLog | undefined,
+  runnerError: string | undefined,
+): string {
+  if (runnerError) {
+    return runnerError;
+  }
+  if (receipt) {
+    const archive = shortHash(receipt.archiveHash);
+    const settlement =
+      receipt.payoutTxHash ??
+      receipt.refundTxHashes?.map((tx) => tx.txHash).filter(Boolean).join(" / ") ??
+      "settlement tx not returned";
+    return `Receipt returned with archive ${archive} and ${receipt.outcome === "draw" ? "refund" : "payout"} ${shortHash(settlement)}.`;
+  }
+  if (status === "finished" || status === "archived") {
+    return "The game engine has ended play. The backend has not returned the final receipt yet.";
+  }
+  const moveText = latestMove
+    ? `${playerName(players, latestMove.playerId)} last played column ${latestMove.column}, row ${latestMove.row}`
+    : "No moves have been accepted yet";
+  const logText = latestLog
+    ? `latest inference was ${latestLog.inferenceMode} from ${playerName(players, latestLog.playerId)}`
+    : "agent inference has not returned yet";
+  return `${moveText}; ${logText}.`;
 }
 
 function AgentDuelist({
@@ -633,6 +851,25 @@ function RoundTimeline({ total, current, history }: { total: number; current: nu
           </span>
         );
       })}
+    </div>
+  );
+}
+
+function AgentGrid({
+  players,
+  latestLogs,
+  winner,
+}: {
+  players: Player[];
+  latestLogs: Map<string, AgentLog>;
+  winner?: string;
+}) {
+  return (
+    <div className="agent-grid">
+      {players.length === 0 ? <EmptyState text="Agent data pending from backend." /> : null}
+      {players.map((player) => (
+        <AgentCard key={player.id} player={player} latestLog={latestLogs.get(player.id)} winner={winner === player.id} />
+      ))}
     </div>
   );
 }
@@ -993,6 +1230,27 @@ function formatMaybe(value: unknown): string {
     return "pending";
   }
   return String(value);
+}
+
+function shortHash(value?: string): string {
+  if (!value) {
+    return "pending";
+  }
+  if (value.length <= 18) {
+    return value;
+  }
+  return `${value.slice(0, 10)}...${value.slice(-6)}`;
+}
+
+function formatTime(value?: string): string {
+  if (!value) {
+    return "pending";
+  }
+  const time = new Date(value);
+  if (Number.isNaN(time.getTime())) {
+    return value;
+  }
+  return time.toLocaleTimeString();
 }
 
 function errorMessage(error: unknown): string {
