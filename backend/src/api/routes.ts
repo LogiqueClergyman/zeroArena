@@ -4,7 +4,7 @@ import type { MatchCoordinator } from "../core/MatchCoordinator.js";
 import type { IGameEngine } from "../games/IGameEngine.js";
 
 export interface DemoMatchFactory {
-  createDemoMatch(): Promise<{
+  createDemoMatch(gameId?: string): Promise<{
     matchId: string;
     players: Array<{ id: string; name: string; walletAddress: string }>;
   }>;
@@ -35,7 +35,9 @@ export async function registerRoutes(
     })),
   );
 
-  app.post("/matches/demo", async () => demoMatchFactory.createDemoMatch());
+  app.post<{ Body: { gameId?: string } }>("/matches/demo", async (request) =>
+    demoMatchFactory.createDemoMatch(request.body?.gameId),
+  );
 
   app.get("/matches/live", async () => coordinator.listLiveMatches());
 

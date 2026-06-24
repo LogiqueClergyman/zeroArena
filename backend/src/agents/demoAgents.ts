@@ -7,6 +7,7 @@ export interface AgentStrategy {
   readonly name: string;
   readonly walletAddress: string;
   readonly privateKeyRef: string;
+  readonly gameIds?: string[];
   decide(input: {
     gameId: string;
     publicState: unknown;
@@ -62,6 +63,10 @@ class DemoAgent implements AgentStrategy {
 
   get privateKeyRef(): string {
     return this.options.privateKeyRef;
+  }
+
+  get gameIds(): string[] {
+    return ["sovereign-bluff"];
   }
 
   async decide(input: {

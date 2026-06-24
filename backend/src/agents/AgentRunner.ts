@@ -80,6 +80,9 @@ export class AgentRunner {
 
         let moved = false;
         for (const agent of this.agents) {
+          if (agent.gameIds && !agent.gameIds.includes(match.gameId)) {
+            continue;
+          }
           const state = this.coordinator.getAgentState(matchId, agent.playerId);
           if (!state.yourTurn) {
             continue;

@@ -34,10 +34,16 @@ export interface PrizePoolInterface extends Interface {
       | "matches"
       | "owner"
       | "payout"
+      | "refundDraw"
   ): FunctionFragment;
 
   getEvent(
-    nameOrSignatureOrTopic: "Funded" | "MatchCreated" | "Paid"
+    nameOrSignatureOrTopic:
+      | "Funded"
+      | "MatchCreated"
+      | "MatchRefunded"
+      | "Paid"
+      | "PlayerRefunded"
   ): EventFragment;
 
   encodeFunctionData(
@@ -63,6 +69,10 @@ export interface PrizePoolInterface extends Interface {
     functionFragment: "payout",
     values: [BytesLike, AddressLike, BytesLike]
   ): string;
+  encodeFunctionData(
+    functionFragment: "refundDraw",
+    values: [BytesLike, BytesLike]
+  ): string;
 
   decodeFunctionResult(
     functionFragment: "createMatch",
@@ -81,6 +91,7 @@ export interface PrizePoolInterface extends Interface {
   decodeFunctionResult(functionFragment: "matches", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "owner", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "payout", data: BytesLike): Result;
+  decodeFunctionResult(functionFragment: "refundDraw", data: BytesLike): Result;
 }
 
 export namespace FundedEvent {
@@ -126,6 +137,19 @@ export namespace MatchCreatedEvent {
   export type LogDescription = TypedLogDescription<Event>;
 }
 
+export namespace MatchRefundedEvent {
+  export type InputTuple = [matchId: BytesLike, storageHash: BytesLike];
+  export type OutputTuple = [matchId: string, storageHash: string];
+  export interface OutputObject {
+    matchId: string;
+    storageHash: string;
+  }
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
+}
+
 export namespace PaidEvent {
   export type InputTuple = [
     matchId: BytesLike,
@@ -144,6 +168,24 @@ export namespace PaidEvent {
     winner: string;
     amount: bigint;
     storageHash: string;
+  }
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
+}
+
+export namespace PlayerRefundedEvent {
+  export type InputTuple = [
+    matchId: BytesLike,
+    player: AddressLike,
+    amount: BigNumberish
+  ];
+  export type OutputTuple = [matchId: string, player: string, amount: bigint];
+  export interface OutputObject {
+    matchId: string;
+    player: string;
+    amount: bigint;
   }
   export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
   export type Filter = TypedDeferredTopicFilter<Event>;
@@ -224,10 +266,11 @@ export interface PrizePool extends BaseContract {
   matches: TypedContractMethod<
     [arg0: BytesLike],
     [
-      [bigint, bigint, boolean, string, string, string] & {
+      [bigint, bigint, boolean, boolean, string, string, string] & {
         requiredStake: bigint;
         totalStake: bigint;
         paid: boolean;
+        refunded: boolean;
         storageHash: string;
         winner: string;
         rulesHash: string;
@@ -240,6 +283,12 @@ export interface PrizePool extends BaseContract {
 
   payout: TypedContractMethod<
     [matchId: BytesLike, winner: AddressLike, storageHash: BytesLike],
+    [void],
+    "nonpayable"
+  >;
+
+  refundDraw: TypedContractMethod<
+    [matchId: BytesLike, storageHash: BytesLike],
     [void],
     "nonpayable"
   >;
@@ -285,10 +334,11 @@ export interface PrizePool extends BaseContract {
   ): TypedContractMethod<
     [arg0: BytesLike],
     [
-      [bigint, bigint, boolean, string, string, string] & {
+      [bigint, bigint, boolean, boolean, string, string, string] & {
         requiredStake: bigint;
         totalStake: bigint;
         paid: boolean;
+        refunded: boolean;
         storageHash: string;
         winner: string;
         rulesHash: string;
@@ -303,6 +353,13 @@ export interface PrizePool extends BaseContract {
     nameOrSignature: "payout"
   ): TypedContractMethod<
     [matchId: BytesLike, winner: AddressLike, storageHash: BytesLike],
+    [void],
+    "nonpayable"
+  >;
+  getFunction(
+    nameOrSignature: "refundDraw"
+  ): TypedContractMethod<
+    [matchId: BytesLike, storageHash: BytesLike],
     [void],
     "nonpayable"
   >;
@@ -322,11 +379,25 @@ export interface PrizePool extends BaseContract {
     MatchCreatedEvent.OutputObject
   >;
   getEvent(
+    key: "MatchRefunded"
+  ): TypedContractEvent<
+    MatchRefundedEvent.InputTuple,
+    MatchRefundedEvent.OutputTuple,
+    MatchRefundedEvent.OutputObject
+  >;
+  getEvent(
     key: "Paid"
   ): TypedContractEvent<
     PaidEvent.InputTuple,
     PaidEvent.OutputTuple,
     PaidEvent.OutputObject
+  >;
+  getEvent(
+    key: "PlayerRefunded"
+  ): TypedContractEvent<
+    PlayerRefundedEvent.InputTuple,
+    PlayerRefundedEvent.OutputTuple,
+    PlayerRefundedEvent.OutputObject
   >;
 
   filters: {
@@ -352,6 +423,17 @@ export interface PrizePool extends BaseContract {
       MatchCreatedEvent.OutputObject
     >;
 
+    "MatchRefunded(bytes32,bytes32)": TypedContractEvent<
+      MatchRefundedEvent.InputTuple,
+      MatchRefundedEvent.OutputTuple,
+      MatchRefundedEvent.OutputObject
+    >;
+    MatchRefunded: TypedContractEvent<
+      MatchRefundedEvent.InputTuple,
+      MatchRefundedEvent.OutputTuple,
+      MatchRefundedEvent.OutputObject
+    >;
+
     "Paid(bytes32,address,uint256,bytes32)": TypedContractEvent<
       PaidEvent.InputTuple,
       PaidEvent.OutputTuple,
@@ -361,6 +443,17 @@ export interface PrizePool extends BaseContract {
       PaidEvent.InputTuple,
       PaidEvent.OutputTuple,
       PaidEvent.OutputObject
+    >;
+
+    "PlayerRefunded(bytes32,address,uint256)": TypedContractEvent<
+      PlayerRefundedEvent.InputTuple,
+      PlayerRefundedEvent.OutputTuple,
+      PlayerRefundedEvent.OutputObject
+    >;
+    PlayerRefunded: TypedContractEvent<
+      PlayerRefundedEvent.InputTuple,
+      PlayerRefundedEvent.OutputTuple,
+      PlayerRefundedEvent.OutputObject
     >;
   };
 }

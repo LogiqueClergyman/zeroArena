@@ -157,4 +157,16 @@ class LocalContractPrizePoolGateway implements PrizePoolGateway {
       status: "paid",
     };
   }
+
+  async refundDraw(): Promise<{
+    txHashes: [];
+    amountWei: string;
+    status: "refunded";
+  }> {
+    return {
+      txHashes: [],
+      amountWei: "1000",
+      status: "refunded",
+    };
+  }
 }

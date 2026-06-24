@@ -1,10 +1,15 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { runRealInferenceConnect4E2E } from "../testing/realInferenceConnect4Harness.js";
 import { runRealInferenceSovereignBluffE2E } from "../testing/realInferenceSovereignBluffHarness.js";
 
 const enabled =
   process.env.RUN_REAL_INFERENCE_E2E === "true" ||
   process.env.npm_lifecycle_event === "test:e2e:real";
+const connect4Enabled =
+  process.env.RUN_REAL_CONNECT4_E2E === "true" ||
+  process.env.RUN_REAL_INFERENCE_E2E === "true" ||
+  process.env.npm_lifecycle_event === "test:e2e:real:connect4";
 
 test(
   "AgentRunner completes Sovereign Bluff with real 0G inference and env-backed live adapters",
@@ -26,5 +31,33 @@ test(
     assert.ok(result.receipt.agentInference.every((summary) => summary.mode === "0g-serving"));
     assert.ok(result.receipt.agentInference.every((summary) => summary.fallbackTurns === 0));
     assert.equal(history.length, 20);
+  },
+);
+
+test(
+  "AgentRunner completes Connect4 with real 0G inference and env-backed live adapters",
+  { skip: connect4Enabled ? false : "set RUN_REAL_CONNECT4_E2E=true to run live Connect4 0G inference E2E" },
+  async () => {
+    const result = await runRealInferenceConnect4E2E();
+    const history = result.coordinator.getHistory(result.matchId);
+
+    assert.equal(result.coordinator.getMatch(result.matchId)?.status, "paid");
+    assert.equal(result.receipt.gameId, "connect4");
+    assert.ok(result.receipt.archiveHash);
+    assert.ok(result.receipt.rulesHash);
+    assert.equal(result.receipt.archiveMode, "0g");
+    assert.equal(result.receipt.payoutMode, "contract");
+    assert.equal(result.receipt.fundingTxHashes.length, 2);
+    assert.equal(result.receipt.agentInference.length, 2);
+    assert.ok(result.receipt.agentInference.every((summary) => summary.mode === "0g-serving"));
+    assert.ok(result.receipt.agentInference.every((summary) => summary.fallbackTurns === 0));
+    assert.ok(history.length > 0);
+    assert.ok(result.outcome === "winner" || result.outcome === "draw");
+    if (result.outcome === "winner") {
+      assert.ok(result.winner);
+      assert.ok(result.receipt.payoutTxHash);
+    } else {
+      assert.equal(result.receipt.refundTxHashes?.length, 2);
+    }
   },
 );

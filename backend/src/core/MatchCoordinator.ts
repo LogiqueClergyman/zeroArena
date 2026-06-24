@@ -51,13 +51,22 @@ export interface PrizePoolGateway {
     status: "paid" | "failed";
     error?: string;
   }>;
+  refundDraw(input: {
+    matchId: string;
+    archiveHash: string;
+  }): Promise<{
+    txHashes: FundingTxReceipt[];
+    amountWei: string;
+    status: "refunded" | "failed";
+    error?: string;
+  }>;
 }
 
 export interface MatchCoordinatorOptions {
   engines: IGameEngine[];
   archive: ArchiveGateway;
   prizePool: PrizePoolGateway;
-  rulebook: RulebookCommitment;
+  rulebook: RulebookCommitment | Record<string, RulebookCommitment>;
   store?: MatchStore;
   timeoutInMs?: number;
   idFactory?: () => string;
@@ -74,7 +83,7 @@ export class MatchCoordinator {
   private readonly engines = new Map<string, IGameEngine>();
   private readonly archive: ArchiveGateway;
   private readonly prizePool: PrizePoolGateway;
-  private readonly rulebook: RulebookCommitment;
+  private readonly rulebooks = new Map<string, RulebookCommitment>();
   private readonly store: MatchStore;
   private readonly timeoutInMs: number;
   private readonly idFactory: () => string;
@@ -87,16 +96,7 @@ export class MatchCoordinator {
     }
     this.archive = options.archive;
     this.prizePool = options.prizePool;
-    this.rulebook = options.rulebook;
-    if (!this.rulebook.rulesHash) {
-      throw new Error("Sovereign Bluff rulebook hash is required");
-    }
-    if (!this.rulebook.rulesUrl) {
-      throw new Error("Sovereign Bluff rulebook URL is required");
-    }
-    if (!this.rulebook.rulesVersion) {
-      throw new Error("Sovereign Bluff rulebook version is required");
-    }
+    this.loadRulebooks(options.rulebook);
     this.store = options.store ?? new MatchStore();
     this.timeoutInMs = options.timeoutInMs ?? 30_000;
     this.idFactory =
@@ -245,6 +245,9 @@ export class MatchCoordinator {
       match.status = "finished";
       match.state.status = "finished";
       match.state.winner = termination.winner;
+      if (termination.outcome === "draw") {
+        match.state.publicContext = "draw";
+      }
       this.store.update(match);
       const receipt = await this.finalizeMatch(match.id);
       return { ok: true, match: this.requireMatch(match.id), receipt };
@@ -281,16 +284,18 @@ export class MatchCoordinator {
     if (match.receipt) {
       return match.receipt;
     }
-    if (!match.state.winner) {
-      throw new Error("Cannot finalize match without winner");
+    const outcome = match.state.winner ? "winner" : match.state.publicContext === "draw" ? "draw" : undefined;
+    if (!outcome) {
+      throw new Error("Cannot finalize match without winner or draw outcome");
     }
+    const rulebook = this.requireRulebook(match.gameId);
 
     const archiveResult = await this.archive.archiveMatch({
       matchId,
       gameId: match.gameId,
-      rulesHash: this.rulebook.rulesHash,
-      rulesUrl: this.rulebook.rulesUrl,
-      rulesVersion: this.rulebook.rulesVersion,
+      rulesHash: rulebook.rulesHash,
+      rulesUrl: rulebook.rulesUrl,
+      rulesVersion: rulebook.rulesVersion,
       history: this.store.getHistory(matchId),
       finalState: match.state,
     });
@@ -301,21 +306,12 @@ export class MatchCoordinator {
     match.status = "archived";
     this.store.update(match);
 
-    const winner = this.requirePlayer(match, match.state.winner);
-    const payout = await this.prizePool.payoutWinner({
-      matchId,
-      winnerWallet: winner.walletAddress,
-      archiveHash: archiveResult.archiveHash,
-    });
-    if (payout.status !== "paid") {
-      match.status = "failed";
-      match.failureReason = payout.error ?? "Payout failed";
-      this.store.update(match);
-      throw new Error(match.failureReason);
-    }
-
     const pool = await this.prizePool.getPool({ matchId });
-    const receipt = this.buildReceipt(match, archiveResult, payout, pool);
+    const settlement =
+      outcome === "winner"
+        ? await this.settleWinner(match, archiveResult.archiveHash)
+        : await this.settleDraw(match, archiveResult.archiveHash);
+    const receipt = this.buildReceipt(match, archiveResult, settlement, pool, rulebook, outcome);
     match.status = "paid";
     match.receipt = receipt;
     this.store.storeReceipt(matchId, receipt);
@@ -325,57 +321,67 @@ export class MatchCoordinator {
   private buildReceipt(
     match: Match,
     archiveResult: { archiveHash: string; url?: string },
-    payout: { txHash: string; amountWei: string },
+    settlement:
+      | { kind: "winner"; txHash: string; amountWei: string }
+      | { kind: "draw"; txHashes: FundingTxReceipt[]; amountWei: string },
     pool: PrizePoolStatus,
+    rulebook: RulebookCommitment,
+    outcome: "winner" | "draw",
   ): MatchReceipt {
     if (!archiveResult.archiveHash) {
       throw new Error("Cannot create receipt without archive hash");
     }
-    if (!this.rulebook.rulesHash) {
+    if (!rulebook.rulesHash) {
       throw new Error("Cannot create receipt without rulebook hash");
     }
-    if (!this.rulebook.rulesUrl) {
+    if (!rulebook.rulesUrl) {
       throw new Error("Cannot create receipt without rulebook URL");
     }
-    if (!this.rulebook.rulesVersion) {
+    if (!rulebook.rulesVersion) {
       throw new Error("Cannot create receipt without rulebook version");
     }
-    if (pool.rulesHash !== this.rulebook.rulesHash) {
+    if (pool.rulesHash !== rulebook.rulesHash) {
       throw new Error("Cannot create receipt because prize pool rulesHash does not match configured rulebook hash");
     }
     if (!pool.fundingTxHashes.length) {
       throw new Error("Cannot create receipt without funding transaction hashes");
     }
-    if (!payout.amountWei) {
+    if (settlement.kind === "winner" && !settlement.amountWei) {
       throw new Error("Cannot create receipt without payout amount");
     }
-    if (!payout.txHash) {
+    if (settlement.kind === "winner" && !settlement.txHash) {
       throw new Error("Cannot create receipt without payout transaction hash");
+    }
+    if (settlement.kind === "draw" && settlement.txHashes.length !== match.players.length) {
+      throw new Error("Cannot create draw receipt without refund transaction hashes");
     }
     if (!pool.prizePoolAddress || !pool.stakeWei || !pool.totalPoolWei) {
       throw new Error("Cannot create receipt without prize pool accounting fields");
     }
-    if (!match.state.winner) {
+    if (outcome === "winner" && !match.state.winner) {
       throw new Error("Cannot create receipt without winner");
     }
 
-    const winner = this.requirePlayer(match, match.state.winner);
+    const winner = match.state.winner ? this.requirePlayer(match, match.state.winner) : undefined;
     return {
       matchId: match.id,
       gameId: match.gameId,
-      rulesHash: this.rulebook.rulesHash,
-      rulesUrl: this.rulebook.rulesUrl,
-      rulesVersion: this.rulebook.rulesVersion,
+      rulesHash: rulebook.rulesHash,
+      rulesUrl: rulebook.rulesUrl,
+      rulesVersion: rulebook.rulesVersion,
+      outcome,
       winner: match.state.winner,
       archiveHash: archiveResult.archiveHash,
       archiveUrl: archiveResult.url,
-      payoutTxHash: payout.txHash,
+      payoutTxHash: settlement.kind === "winner" ? settlement.txHash : undefined,
+      refundTxHashes: settlement.kind === "draw" ? settlement.txHashes : undefined,
       prizePoolAddress: pool.prizePoolAddress,
       stakeWei: pool.stakeWei,
       totalPoolWei: pool.totalPoolWei,
       fundingTxHashes: pool.fundingTxHashes,
-      winnerWalletAddress: winner.walletAddress,
-      payoutAmountWei: payout.amountWei,
+      winnerWalletAddress: winner?.walletAddress,
+      payoutAmountWei: settlement.kind === "winner" ? settlement.amountWei : undefined,
+      refundAmountWei: settlement.kind === "draw" ? settlement.amountWei : undefined,
       payoutMode: this.prizePool.mode,
       archiveMode: this.archive.mode,
       agentInference: [...(this.inference.get(match.id)?.values() ?? [])],
@@ -389,6 +395,77 @@ export class MatchCoordinator {
       throw new Error(`Unknown game: ${gameId}`);
     }
     return engine;
+  }
+
+  private requireRulebook(gameId: string): RulebookCommitment {
+    const rulebook = this.rulebooks.get(gameId) ?? this.rulebooks.get("*");
+    if (!rulebook) {
+      throw new Error(`Missing rulebook commitment for ${gameId}`);
+    }
+    return rulebook;
+  }
+
+  private loadRulebooks(input: RulebookCommitment | Record<string, RulebookCommitment>): void {
+    if (isRulebookCommitment(input)) {
+      this.validateRulebook("*", input);
+      this.rulebooks.set("*", input);
+      return;
+    }
+    for (const [gameId, rulebook] of Object.entries(input)) {
+      this.validateRulebook(gameId, rulebook);
+      this.rulebooks.set(gameId, rulebook);
+    }
+  }
+
+  private validateRulebook(gameId: string, rulebook: RulebookCommitment): void {
+    if (!rulebook.rulesHash) {
+      throw new Error(`${gameId} rulebook hash is required`);
+    }
+    if (!rulebook.rulesUrl) {
+      throw new Error(`${gameId} rulebook URL is required`);
+    }
+    if (!rulebook.rulesVersion) {
+      throw new Error(`${gameId} rulebook version is required`);
+    }
+  }
+
+  private async settleWinner(
+    match: Match,
+    archiveHash: string,
+  ): Promise<{ kind: "winner"; txHash: string; amountWei: string }> {
+    if (!match.state.winner) {
+      throw new Error("Cannot payout winner without winner");
+    }
+    const winner = this.requirePlayer(match, match.state.winner);
+    const payout = await this.prizePool.payoutWinner({
+      matchId: match.id,
+      winnerWallet: winner.walletAddress,
+      archiveHash,
+    });
+    if (payout.status !== "paid") {
+      match.status = "failed";
+      match.failureReason = payout.error ?? "Payout failed";
+      this.store.update(match);
+      throw new Error(match.failureReason);
+    }
+    return { kind: "winner", txHash: payout.txHash, amountWei: payout.amountWei };
+  }
+
+  private async settleDraw(
+    match: Match,
+    archiveHash: string,
+  ): Promise<{ kind: "draw"; txHashes: FundingTxReceipt[]; amountWei: string }> {
+    const refund = await this.prizePool.refundDraw({
+      matchId: match.id,
+      archiveHash,
+    });
+    if (refund.status !== "refunded") {
+      match.status = "failed";
+      match.failureReason = refund.error ?? "Draw refund failed";
+      this.store.update(match);
+      throw new Error(match.failureReason);
+    }
+    return { kind: "draw", txHashes: refund.txHashes, amountWei: refund.amountWei };
   }
 
   private requireMatch(matchId: string): Match {
@@ -414,11 +491,19 @@ export class MatchCoordinator {
 
     const board = match.state.board as {
       phase?: string;
+      currentPlayer?: string;
       broadcastsPerPlayer?: number;
       broadcasts?: Record<string, unknown>;
       broadcastCounts?: Record<string, number>;
       bids?: Record<string, unknown>;
     };
+
+    if (match.state.currentPlayer) {
+      return match.state.currentPlayer === playerId;
+    }
+    if (board.currentPlayer) {
+      return board.currentPlayer === playerId;
+    }
 
     if (board.phase === "broadcast") {
       return (board.broadcastCounts?.[playerId] ?? 0) < (board.broadcastsPerPlayer ?? 1);
@@ -462,4 +547,10 @@ export class MatchCoordinator {
 
 export function isPaidStatus(status: MatchStatus): boolean {
   return status === "paid";
+}
+
+function isRulebookCommitment(
+  input: RulebookCommitment | Record<string, RulebookCommitment>,
+): input is RulebookCommitment {
+  return typeof (input as RulebookCommitment).rulesHash === "string";
 }

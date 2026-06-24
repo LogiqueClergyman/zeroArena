@@ -4,12 +4,14 @@ import { config as loadEnv } from "dotenv";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { AgentRunner } from "./agents/AgentRunner.js";
+import { createConnect4Agent } from "./agents/connect4Agents.js";
 import { createAggressiveAgent, createCautiousAgent } from "./agents/demoAgents.js";
 import { MockProvider } from "./agents/providers/MockProvider.js";
 import { ZeroGServingProvider } from "./agents/providers/ZeroGServingProvider.js";
 import { registerRoutes, type DemoMatchFactory } from "./api/routes.js";
-import { MatchCoordinator } from "./core/MatchCoordinator.js";
+import { MatchCoordinator, type RulebookCommitment } from "./core/MatchCoordinator.js";
 import type { Player } from "./core/types.js";
+import { Connect4 } from "./games/Connect4.js";
 import { SovereignBluff } from "./games/SovereignBluff.js";
 import { MockArchiveAdapter } from "./integrations/MockArchiveAdapter.js";
 import { ZeroGStorageAdapter } from "./integrations/ZeroGStorageAdapter.js";
@@ -22,17 +24,23 @@ class DemoMatchService implements DemoMatchFactory {
     private readonly coordinator: MatchCoordinator,
     private readonly prizePool: ContractPrizePoolAdapter,
     private readonly players: Player[],
+    private readonly rulebooks: Record<string, RulebookCommitment>,
   ) {}
 
-  async createDemoMatch(): Promise<{
+  async createDemoMatch(gameId = "sovereign-bluff"): Promise<{
     matchId: string;
     players: Array<{ id: string; name: string; walletAddress: string }>;
   }> {
-    const match = this.coordinator.createMatch("sovereign-bluff", this.players);
+    const rulesHash = this.rulebooks[gameId]?.rulesHash;
+    if (!rulesHash) {
+      throw new Error(`Missing rulebook hash for ${gameId}`);
+    }
+    const match = this.coordinator.createMatch(gameId, this.players);
     try {
       await this.prizePool.createAndFund({
         matchId: match.id,
         players: this.players,
+        rulesHash,
       });
       await this.coordinator.activateMatch(match.id);
       return {
@@ -53,14 +61,14 @@ class DemoMatchService implements DemoMatchFactory {
 export async function buildServer(env: NodeJS.ProcessEnv = process.env) {
   validateStartup(env);
   const localDevAllowMocks = env.LOCAL_DEV_ALLOW_MOCKS === "true";
-  const engine = new SovereignBluff();
-  const engines = [engine];
+  const engines = [new SovereignBluff(), new Connect4()];
+  const rulebooks = rulebooksFromEnv(env);
   const prizePool = new ContractPrizePoolAdapter({
     rpcUrl: env.EVM_RPC_URL ?? "",
     ownerPrivateKey: env.EVM_PRIVATE_KEY ?? "",
     prizePoolAddress: env.PRIZE_POOL_ADDRESS ?? "",
     stakeWei: env.MATCH_STAKE_WEI ?? "",
-    rulesHash: env.SOVEREIGN_BLUFF_RULEBOOK_HASH ?? "",
+    rulesHash: env.SOVEREIGN_BLUFF_RULEBOOK_HASH ?? env.CONNECT4_RULEBOOK_HASH ?? "",
     expectedChainId: BigInt(env.EVM_CHAIN_ID ?? "16602"),
     privateKeysByRef: {
       AGENT_ALPHA_PRIVATE_KEY: env.AGENT_ALPHA_PRIVATE_KEY,
@@ -80,11 +88,7 @@ export async function buildServer(env: NodeJS.ProcessEnv = process.env) {
     engines,
     archive,
     prizePool,
-    rulebook: {
-      rulesHash: env.SOVEREIGN_BLUFF_RULEBOOK_HASH ?? "",
-      rulesUrl: env.SOVEREIGN_BLUFF_RULEBOOK_URL ?? "",
-      rulesVersion: env.SOVEREIGN_BLUFF_RULEBOOK_VERSION ?? "",
-    },
+    rulebook: rulebooks,
   });
   const provider =
     env.AGENT_INFERENCE_MODE === "0g-serving"
@@ -136,6 +140,24 @@ export async function buildServer(env: NodeJS.ProcessEnv = process.env) {
       allowMockFallback: localDevAllowMocks,
       validatorForSchema: (schema) => runner.validatorForSchema(schema),
     }),
+    createConnect4Agent({
+      playerId: players[0].id,
+      name: "Vesper",
+      walletAddress: players[0].walletAddress,
+      privateKeyRef: "AGENT_ALPHA_PRIVATE_KEY",
+      provider,
+      allowMockFallback: localDevAllowMocks,
+      validatorForSchema: (schema) => runner.validatorForSchema(schema),
+    }),
+    createConnect4Agent({
+      playerId: players[1].id,
+      name: "Knox",
+      walletAddress: players[1].walletAddress,
+      privateKeyRef: "AGENT_BETA_PRIVATE_KEY",
+      provider,
+      allowMockFallback: localDevAllowMocks,
+      validatorForSchema: (schema) => runner.validatorForSchema(schema),
+    }),
   ];
   const activeRunner = new AgentRunner(coordinator, agents);
   const app = Fastify({ logger: true });
@@ -147,9 +169,24 @@ export async function buildServer(env: NodeJS.ProcessEnv = process.env) {
     coordinator,
     engines,
     runner: activeRunner,
-    demoMatchFactory: new DemoMatchService(coordinator, prizePool, players),
+    demoMatchFactory: new DemoMatchService(coordinator, prizePool, players, rulebooks),
   });
   return app;
+}
+
+function rulebooksFromEnv(env: NodeJS.ProcessEnv): Record<string, RulebookCommitment> {
+  return {
+    "sovereign-bluff": {
+      rulesHash: env.SOVEREIGN_BLUFF_RULEBOOK_HASH ?? "",
+      rulesUrl: env.SOVEREIGN_BLUFF_RULEBOOK_URL ?? "",
+      rulesVersion: env.SOVEREIGN_BLUFF_RULEBOOK_VERSION ?? "",
+    },
+    connect4: {
+      rulesHash: env.CONNECT4_RULEBOOK_HASH ?? "",
+      rulesUrl: env.CONNECT4_RULEBOOK_URL ?? "",
+      rulesVersion: env.CONNECT4_RULEBOOK_VERSION ?? "",
+    },
+  };
 }
 
 function parseCorsOrigins(value: string | undefined): Array<string | RegExp> {
@@ -210,6 +247,9 @@ export function validateStartup(env: NodeJS.ProcessEnv): void {
     "SOVEREIGN_BLUFF_RULEBOOK_HASH",
     "SOVEREIGN_BLUFF_RULEBOOK_URL",
     "SOVEREIGN_BLUFF_RULEBOOK_VERSION",
+    "CONNECT4_RULEBOOK_HASH",
+    "CONNECT4_RULEBOOK_URL",
+    "CONNECT4_RULEBOOK_VERSION",
     "AGENT_ALPHA_PRIVATE_KEY",
     "AGENT_BETA_PRIVATE_KEY",
   ].filter((key) => !env[key]);

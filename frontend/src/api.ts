@@ -44,16 +44,19 @@ export interface MatchReceipt {
   rulesHash: string;
   rulesUrl: string;
   rulesVersion: string;
-  winner: string;
+  outcome: "winner" | "draw";
+  winner?: string;
   archiveHash: string;
   archiveUrl?: string;
   payoutTxHash?: string;
+  refundTxHashes?: FundingTxReceipt[];
   prizePoolAddress: string;
   stakeWei: string;
   totalPoolWei: string;
   fundingTxHashes: FundingTxReceipt[];
-  winnerWalletAddress: string;
-  payoutAmountWei: string;
+  winnerWalletAddress?: string;
+  payoutAmountWei?: string;
+  refundAmountWei?: string;
   payoutMode: "contract";
   archiveMode: "mock" | "0g";
   agentInference: AgentInferenceSummary[];
@@ -80,6 +83,16 @@ export interface MatchRenderData {
   revealedBids?: Array<{ playerId: string; amount: number }>;
   history?: RoundSummary[];
   winner?: string;
+  rows?: number;
+  columns?: number;
+  board?: Array<Array<string | null>>;
+  currentPlayer?: string;
+  lastMove?: { playerId: string; row: number; column: number };
+  winningCells?: Array<{ row: number; column: number }>;
+  validColumns?: number[];
+  moves?: Array<{ playerId: string; row: number; column: number }>;
+  moveCount?: number;
+  outcome?: "winner" | "draw";
   prizePoolAddress?: string;
   stakeWei?: string;
   totalPoolWei?: string;
@@ -188,8 +201,11 @@ export async function getGameDetail(gameId: string): Promise<GameDetail> {
   };
 }
 
-export async function createDemoMatch(): Promise<DemoMatchResponse> {
-  return request("/matches/demo", { method: "POST" });
+export async function createDemoMatch(gameId?: string): Promise<DemoMatchResponse> {
+  return request("/matches/demo", {
+    method: "POST",
+    body: gameId ? JSON.stringify({ gameId }) : undefined,
+  });
 }
 
 export async function startDemoAgents(matchId: string): Promise<void> {
@@ -245,6 +261,24 @@ const gameCatalog: Record<
     ],
     prizePoolModel:
       "Both agent wallets fund the configured PrizePool stake before play. After archival, the backend submits winner payout through the deployed contract.",
+  },
+  connect4: {
+    description:
+      "A wallet-backed 7x6 Connect4 duel with gravity, four-in-a-row wins, and draw refunds.",
+    rules: [
+      "Two players alternate dropping discs into seven columns.",
+      "Each disc falls to the lowest empty row in that column.",
+      "Four connected discs horizontally, vertically, or diagonally wins.",
+      "Full columns reject moves.",
+      "A full board without a winner is a draw and refunds both players.",
+    ],
+    instructions: [
+      "Open an active match to watch the backend-rendered board update live.",
+      "Disc positions, last move, winning four, and draw state come from /match/:id/ui.",
+      "Archive, funding, rulebook, payout, and refund evidence stay pending until returned by the backend.",
+    ],
+    prizePoolModel:
+      "Both agent wallets fund the configured PrizePool stake before play. After archival, winner matches pay the winner; draw matches call the contract refund path for both participants.",
   },
 };
 

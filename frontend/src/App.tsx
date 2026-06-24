@@ -206,7 +206,7 @@ function GameDetailPage({ gameId, navigate }: { gameId: string; navigate: (to: s
   const startDemo = async () => {
     setStarting(true);
     try {
-      const match = await createDemoMatch();
+      const match = await createDemoMatch(gameId);
       void startDemoAgents(match.matchId).catch((err) => setError(`Demo agent runner failed: ${errorMessage(err)}`));
       window.open(`/game/${match.matchId}`, "_blank", "noopener,noreferrer");
       await refresh();
@@ -340,7 +340,7 @@ function LiveGamePage({ matchId, navigate }: { matchId: string; navigate: (to: s
   return (
     <section className="live-game-page">
       <nav className="game-nav">
-        <button className="secondary" onClick={() => navigate("/games/sovereign-bluff")}>Game Detail</button>
+        <button className="secondary" onClick={() => navigate(`/games/${ui?.gameId ?? "sovereign-bluff"}`)}>Game Detail</button>
         <span>{matchId}</span>
         <strong>{ui?.status ?? (loading ? "loading" : "pending")}</strong>
       </nav>
@@ -348,7 +348,11 @@ function LiveGamePage({ matchId, navigate }: { matchId: string; navigate: (to: s
       {ui?.runnerError ? <StatusBanner tone="bad" label="Agent runner error" value={ui.runnerError} /> : null}
       {loading ? <StatusBanner tone="warn" label="Loading" value="Waiting for /match/:id/ui." /> : null}
 
-      <SovereignBluffStage data={data} players={players} winner={winner} status={ui?.status ?? "waiting"} />
+      {ui?.gameId === "connect4" ? (
+        <Connect4Stage data={data} players={players} winner={winner} status={ui?.status ?? "waiting"} />
+      ) : (
+        <SovereignBluffStage data={data} players={players} winner={winner} status={ui?.status ?? "waiting"} />
+      )}
 
       <section className="game-evidence-layout">
         <div className="game-side">
@@ -362,8 +366,14 @@ function LiveGamePage({ matchId, navigate }: { matchId: string; navigate: (to: s
         </div>
         <div className="game-side">
           <h2>Current Round</h2>
-          <Broadcasts messages={data?.messages ?? []} players={players} />
-          <BidStatus pendingBids={data?.pendingBids ?? []} revealedBids={data?.revealedBids ?? []} players={players} />
+          {ui?.gameId === "connect4" ? (
+            <Connect4MoveList moves={data?.moves ?? []} players={players} />
+          ) : (
+            <>
+              <Broadcasts messages={data?.messages ?? []} players={players} />
+              <BidStatus pendingBids={data?.pendingBids ?? []} revealedBids={data?.revealedBids ?? []} players={players} />
+            </>
+          )}
         </div>
         <div className="game-side">
           <h2>0G And Payout Evidence</h2>
@@ -373,7 +383,11 @@ function LiveGamePage({ matchId, navigate }: { matchId: string; navigate: (to: s
 
       <section className="game-wide">
         <h2>Round History</h2>
-        <RoundHistory history={data?.history ?? []} players={players} />
+        {ui?.gameId === "connect4" ? (
+          <Connect4MoveList moves={data?.moves ?? []} players={players} expanded />
+        ) : (
+          <RoundHistory history={data?.history ?? []} players={players} />
+        )}
       </section>
       <section className="game-wide">
         <h2>Final Receipt</h2>
@@ -446,6 +460,78 @@ function SovereignBluffStage({
       </div>
 
       <RoundTimeline total={Number(data?.totalRounds ?? 5)} current={Number(data?.round ?? 0)} history={data?.history ?? []} />
+    </section>
+  );
+}
+
+function Connect4Stage({
+  data,
+  players,
+  winner,
+  status,
+}: {
+  data?: MatchUiResponse["render"]["data"];
+  players: Player[];
+  winner?: string;
+  status: string;
+}) {
+  const board = data?.board ?? [];
+  const currentPlayer = data?.currentPlayer;
+  const outcome = data?.outcome ?? (winner ? "winner" : undefined);
+  const winningCells = new Set((data?.winningCells ?? []).map((cell) => `${cell.row}:${cell.column}`));
+  const lastMoveKey = data?.lastMove ? `${data.lastMove.row}:${data.lastMove.column}` : "";
+
+  return (
+    <section className={`connect4-stage ${outcome ? "complete" : ""}`}>
+      <div className="connect4-header">
+        <div>
+          <span className="eyebrow">Connect4</span>
+          <h1>{outcome === "draw" ? "Draw refund" : winner ? `${playerName(players, winner)} connects four` : "Drop phase"}</h1>
+        </div>
+        <div className="connect4-status">
+          <Metric label="Status" value={status} />
+          <Metric label="Turn" value={currentPlayer ? playerName(players, currentPlayer) : "pending"} />
+          <Metric label="Moves" value={String(data?.moveCount ?? 0)} />
+        </div>
+      </div>
+
+      <div className="connect4-layout">
+        <div className="connect4-board" style={{ "--columns": String(data?.columns ?? 7) } as React.CSSProperties}>
+          {board.length === 0 ? <EmptyState text="Board state pending from backend." /> : null}
+          {board.map((row, rowIndex) =>
+            row.map((cell, columnIndex) => {
+              const key = `${rowIndex}:${columnIndex}`;
+              const ownerIndex = players.findIndex((player) => player.id === cell);
+              return (
+                <div
+                  className={`connect4-slot ${cell ? `filled player-${ownerIndex}` : ""} ${lastMoveKey === key ? "last" : ""} ${winningCells.has(key) ? "winning" : ""}`}
+                  key={key}
+                >
+                  <span>{cell ? playerName(players, cell).slice(0, 1) : ""}</span>
+                </div>
+              );
+            }),
+          )}
+        </div>
+        <aside className="connect4-players">
+          {players.map((player, index) => (
+            <article
+              className={`connect4-player player-${index} ${currentPlayer === player.id ? "active" : ""} ${winner === player.id ? "winner" : ""}`}
+              key={player.id}
+            >
+              <span className="disc-swatch" />
+              <div>
+                <strong>{player.name || player.id}</strong>
+                <code>{player.walletAddress || "wallet pending"}</code>
+              </div>
+            </article>
+          ))}
+          <div className="valid-columns">
+            <span>Valid columns</span>
+            <strong>{data?.validColumns?.join(", ") || "pending"}</strong>
+          </div>
+        </aside>
+      </div>
     </section>
   );
 }
@@ -656,6 +742,32 @@ function BidStatus({
   );
 }
 
+function Connect4MoveList({
+  moves,
+  players,
+  expanded,
+}: {
+  moves: Array<{ playerId: string; row: number; column: number }>;
+  players: Player[];
+  expanded?: boolean;
+}) {
+  const visible = expanded ? moves : moves.slice(-8);
+  if (visible.length === 0) {
+    return <EmptyState text="Connect4 moves will appear after the first backend-submitted drop." />;
+  }
+  return (
+    <div className="connect4-move-list">
+      {visible.map((move, index) => (
+        <div className="connect4-move-row" key={`${move.playerId}-${move.row}-${move.column}-${index}`}>
+          <strong>{playerName(players, move.playerId)}</strong>
+          <span>Column {move.column}</span>
+          <small>Row {move.row}</small>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function RoundHistory({ history, players }: { history: RoundSummary[]; players: Player[] }) {
   if (history.length === 0) {
     return <EmptyState text="Round history will appear after the first simultaneous reveal." />;
@@ -695,14 +807,24 @@ function FinalReceipt({ receipt, winner, status }: { receipt?: MatchReceipt; win
   return (
     <div className="receipt-grid">
       <EvidenceRow label="Match ID" value={receipt.matchId} mono />
-      <EvidenceRow label="Winner" value={receipt.winner} />
-      <EvidenceRow label="Winner wallet" value={receipt.winnerWalletAddress} mono />
+      <EvidenceRow label="Outcome" value={receipt.outcome ?? (receipt.winner ? "winner" : "pending")} />
+      <EvidenceRow label="Winner" value={receipt.winner ?? "none - draw refund"} />
+      <EvidenceRow label="Winner wallet" value={receipt.winnerWalletAddress ?? "none - draw refund"} mono />
       <EvidenceRow label="0G Storage hash" value={receipt.archiveHash} mono tone={receipt.archiveMode === "0g" ? "good" : "warn"} />
       <EvidenceRow label="Storage retrieval" value={receipt.archiveUrl ?? "Use the 0G storage indexer with this root hash."} mono />
       <EvidenceRow label="Rulebook hash" value={receipt.rulesHash} mono tone="good" />
-      <EvidenceRow label="Payout amount wei" value={receipt.payoutAmountWei} mono />
-      <EvidenceRow label="Payout tx hash" value={receipt.payoutTxHash ?? "missing"} mono tone={receipt.payoutTxHash ? "good" : "bad"} />
+      <EvidenceRow label="Payout amount wei" value={receipt.payoutAmountWei ?? "none - draw refund"} mono />
+      <EvidenceRow label="Payout tx hash" value={receipt.payoutTxHash ?? "none - draw refund"} mono tone={receipt.payoutTxHash ? "good" : receipt.outcome === "draw" ? "warn" : "bad"} />
+      <EvidenceRow label="Refund amount wei" value={receipt.refundAmountWei ?? "none"} mono tone={receipt.refundAmountWei ? "good" : undefined} />
       <EvidenceRow label="Completed" value={receipt.completedAt} />
+      {receipt.refundTxHashes && receipt.refundTxHashes.length > 0 ? (
+        <div className="tx-list">
+          <h3>Draw Refund Transactions</h3>
+          {receipt.refundTxHashes.map((tx) => (
+            <FundingRow key={`${tx.playerId}-${tx.txHash}`} tx={tx} />
+          ))}
+        </div>
+      ) : null}
       <div className="tx-list">
         <h3>Per-Agent Inference Summary</h3>
         {receipt.agentInference.map((item) => (
@@ -880,6 +1002,9 @@ function errorMessage(error: unknown): string {
 function gameDescription(gameId: string, name: string): string {
   if (gameId === "sovereign-bluff") {
     return "Five rounds of broadcasts, hidden bids, treasury swings, and final payout evidence.";
+  }
+  if (gameId === "connect4") {
+    return "A 7x6 disc-dropping duel with four-in-a-row wins and draw refund settlement.";
   }
   return `${name} is listed by the backend registry. Extra metadata is not exposed yet.`;
 }

@@ -9,6 +9,7 @@ contract PrizePool {
         uint256 requiredStake;
         uint256 totalStake;
         bool paid;
+        bool refunded;
         bytes32 storageHash;
         address winner;
         bytes32 rulesHash;
@@ -20,6 +21,8 @@ contract PrizePool {
     event MatchCreated(bytes32 indexed matchId, address[] players, uint256 requiredStake, bytes32 rulesHash);
     event Funded(bytes32 indexed matchId, address indexed funder, uint256 amount);
     event Paid(bytes32 indexed matchId, address indexed winner, uint256 amount, bytes32 storageHash);
+    event MatchRefunded(bytes32 indexed matchId, bytes32 indexed storageHash);
+    event PlayerRefunded(bytes32 indexed matchId, address indexed player, uint256 amount);
 
     modifier onlyOwner() {
         require(msg.sender == owner, "not owner");
@@ -49,7 +52,7 @@ contract PrizePool {
     function fund(bytes32 matchId) external payable {
         MatchPool storage pool = matches[matchId];
         require(pool.players.length > 0, "missing match");
-        require(!pool.paid, "already paid");
+        require(!pool.paid && !pool.refunded, "already finalized");
         require(isPlayer(matchId, msg.sender), "not player");
         require(msg.value == pool.requiredStake, "wrong stake");
         require(fundedAmount[matchId][msg.sender] == 0, "already funded");
@@ -61,9 +64,10 @@ contract PrizePool {
     function payout(bytes32 matchId, address payable winner, bytes32 storageHash) external onlyOwner {
         MatchPool storage pool = matches[matchId];
         require(pool.players.length > 0, "missing match");
-        require(!pool.paid, "already paid");
+        require(!pool.paid && !pool.refunded, "already finalized");
         require(isPlayer(matchId, winner), "winner not player");
         require(isFullyFunded(matchId), "not fully funded");
+        require(storageHash != bytes32(0), "zero storage hash");
         uint256 amount = pool.totalStake;
         require(amount > 0, "empty pool");
         pool.paid = true;
@@ -72,6 +76,30 @@ contract PrizePool {
         (bool ok, ) = winner.call{value: amount}("");
         require(ok, "transfer failed");
         emit Paid(matchId, winner, amount, storageHash);
+    }
+
+    function refundDraw(bytes32 matchId, bytes32 storageHash) external onlyOwner {
+        MatchPool storage pool = matches[matchId];
+        require(pool.players.length > 0, "missing match");
+        require(!pool.paid && !pool.refunded, "already finalized");
+        require(isFullyFunded(matchId), "not fully funded");
+        require(storageHash != bytes32(0), "zero storage hash");
+
+        pool.refunded = true;
+        pool.storageHash = storageHash;
+
+        for (uint256 i = 0; i < pool.players.length; i++) {
+            address payable player = payable(pool.players[i]);
+            uint256 amount = fundedAmount[matchId][player];
+            require(amount > 0, "missing funded amount");
+            fundedAmount[matchId][player] = 0;
+            pool.totalStake -= amount;
+            (bool ok, ) = player.call{value: amount}("");
+            require(ok, "transfer failed");
+            emit PlayerRefunded(matchId, player, amount);
+        }
+
+        emit MatchRefunded(matchId, storageHash);
     }
 
     function isFullyFunded(bytes32 matchId) public view returns (bool) {

@@ -37,4 +37,13 @@ export interface PrizePoolAdapter {
     status: "paid" | "failed";
     error?: string;
   }>;
+  refundDraw(input: {
+    matchId: string;
+    archiveHash: string;
+  }): Promise<{
+    txHashes: FundingTxReceipt[];
+    amountWei: string;
+    status: "refunded" | "failed";
+    error?: string;
+  }>;
 }

@@ -1,10 +1,20 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { AgentRunner } from "./AgentRunner.js";
+import { createConnect4Agent } from "./connect4Agents.js";
 import type {
   LLMCompletionInput,
   LLMCompletionResult,
   LLMProvider,
 } from "./providers/LLMProvider.js";
+import {
+  MatchCoordinator,
+  type ArchiveGateway,
+  type PrizePoolGateway,
+  type PrizePoolStatus,
+} from "../core/MatchCoordinator.js";
+import type { FundingTxReceipt, Player } from "../core/types.js";
+import { Connect4 } from "../games/Connect4.js";
 import { runLocalSovereignBluffE2E } from "../testing/localSovereignBluffHarness.js";
 
 test("AgentRunner completes a full Sovereign Bluff match through the real phase protocol", async () => {
@@ -101,6 +111,68 @@ test("AgentRunner repairs repeated broadcast after one dialogue retry instead of
 
   assert.equal(result.coordinator.getMatch(result.matchId)?.status, "paid");
   assert.ok(repairedLog);
+});
+
+test("AgentRunner completes a full Connect4 match through MatchCoordinator", async () => {
+  const players: Player[] = [
+    {
+      id: "agent_alpha",
+      name: "Alpha",
+      walletAddress: "0x00000000000000000000000000000000000000a1",
+      agentKind: "mock",
+    },
+    {
+      id: "agent_beta",
+      name: "Beta",
+      walletAddress: "0x00000000000000000000000000000000000000b2",
+      agentKind: "mock",
+    },
+  ];
+  const coordinator = new MatchCoordinator({
+    engines: [new Connect4()],
+    archive: new LocalArchiveGateway(),
+    prizePool: new LocalContractPrizePoolGateway(players),
+    rulebook: {
+      rulesHash: "0x2222222222222222222222222222222222222222222222222222222222222222",
+      rulesUrl: "mock://rulebook/connect4.v1.json",
+      rulesVersion: "1.0.0-test",
+    },
+    idFactory: () => "match_connect4_e2e",
+    now: () => new Date("2026-06-24T00:00:00.000Z"),
+  });
+  const validatorRunner = new AgentRunner(coordinator, []);
+  const provider = new InvalidConnect4Provider();
+  const runner = new AgentRunner(coordinator, [
+    createConnect4Agent({
+      playerId: "agent_alpha",
+      name: "Alpha",
+      walletAddress: players[0].walletAddress,
+      privateKeyRef: "AGENT_ALPHA_PRIVATE_KEY",
+      provider,
+      allowMockFallback: true,
+      validatorForSchema: (schema) => validatorRunner.validatorForSchema(schema),
+    }),
+    createConnect4Agent({
+      playerId: "agent_beta",
+      name: "Beta",
+      walletAddress: players[1].walletAddress,
+      privateKeyRef: "AGENT_BETA_PRIVATE_KEY",
+      provider,
+      allowMockFallback: true,
+      validatorForSchema: (schema) => validatorRunner.validatorForSchema(schema),
+    }),
+  ]);
+  const match = coordinator.createMatch("connect4", players);
+  await coordinator.activateMatch(match.id);
+
+  const result = await runner.run(match.id);
+  const receipt = result.receipt ?? coordinator.getReceipt(match.id);
+
+  assert.equal(coordinator.getMatch(match.id)?.status, "paid");
+  assert.ok(receipt);
+  assert.ok(receipt?.winner || receipt?.outcome === "draw");
+  assert.equal(receipt?.rulesHash, "0x2222222222222222222222222222222222222222222222222222222222222222");
+  assert.ok(coordinator.getHistory(match.id).length > 0);
 });
 
 class BidDuringBroadcastOnceProvider implements LLMProvider {
@@ -271,6 +343,75 @@ class AlwaysEchoPreviousBroadcastProvider implements LLMProvider {
     }
     const rest = prompt.slice(index + marker.length);
     return JSON.parse(publicStateJson(rest).trim()) as Record<string, unknown>;
+  }
+}
+
+class InvalidConnect4Provider implements LLMProvider {
+  readonly mode = "mock" as const;
+
+  async complete(): Promise<LLMCompletionResult> {
+    return {
+      text: JSON.stringify({ column: 99 }),
+      provider: "invalid-connect4-provider",
+      model: "regression",
+      latencyMs: 0,
+    };
+  }
+}
+
+class LocalArchiveGateway implements ArchiveGateway {
+  readonly mode = "mock" as const;
+
+  async archiveMatch(): Promise<{ archiveHash: string; url?: string }> {
+    return {
+      archiveHash: "mock-0g-connect4-archive",
+      url: "mock://archive/match_connect4_e2e",
+    };
+  }
+}
+
+class LocalContractPrizePoolGateway implements PrizePoolGateway {
+  readonly mode = "contract" as const;
+
+  constructor(private readonly players: Player[]) {}
+
+  async getPool(): Promise<PrizePoolStatus> {
+    return {
+      prizePoolAddress: "0x0000000000000000000000000000000000000abc",
+      stakeWei: "1000",
+      totalPoolWei: "2000",
+      rulesHash: "0x2222222222222222222222222222222222222222222222222222222222222222",
+      fullyFunded: true,
+      paid: true,
+      poolCreationTxHash: "0xpoolcreationconnect4",
+      fundingTxHashes: this.players.map((player) => ({
+        playerId: player.id,
+        walletAddress: player.walletAddress,
+        txHash: `0xfund${player.id.replace("agent_", "")}`,
+        amountWei: "1000",
+      })),
+    };
+  }
+
+  async payoutWinner(): Promise<{ txHash: string; amountWei: string; status: "paid" }> {
+    return { txHash: "0xpayoutconnect4", amountWei: "2000", status: "paid" };
+  }
+
+  async refundDraw(): Promise<{
+    txHashes: FundingTxReceipt[];
+    amountWei: string;
+    status: "refunded";
+  }> {
+    return {
+      txHashes: this.players.map((player) => ({
+        playerId: player.id,
+        walletAddress: player.walletAddress,
+        txHash: "0xrefundconnect4",
+        amountWei: "1000",
+      })),
+      amountWei: "1000",
+      status: "refunded",
+    };
   }
 }
 

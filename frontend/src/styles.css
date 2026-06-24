@@ -574,6 +574,164 @@ code {
   animation: phasePulse 1.4s ease-in-out infinite;
 }
 
+.connect4-stage {
+  display: grid;
+  gap: 18px;
+  min-height: calc(100vh - 92px);
+  border: 1px solid rgba(74, 144, 255, 0.42);
+  border-radius: 8px;
+  background:
+    linear-gradient(180deg, rgba(5, 25, 52, 0.94), rgba(7, 12, 15, 0.98)),
+    repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.04) 0 2px, transparent 2px 24px);
+  padding: 18px;
+}
+
+.connect4-header,
+.connect4-layout {
+  display: grid;
+  gap: 16px;
+}
+
+.connect4-header {
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 520px);
+  align-items: end;
+}
+
+.connect4-header h1 {
+  margin: 4px 0 0;
+  font-size: clamp(32px, 5vw, 72px);
+  line-height: 0.95;
+}
+
+.connect4-status {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.connect4-layout {
+  grid-template-columns: minmax(320px, 780px) minmax(260px, 1fr);
+  align-items: center;
+}
+
+.connect4-board {
+  --columns: 7;
+  display: grid;
+  grid-template-columns: repeat(var(--columns), minmax(34px, 1fr));
+  gap: clamp(6px, 1.2vw, 14px);
+  width: min(100%, 780px);
+  aspect-ratio: 7 / 6;
+  border: 8px solid #0a4fb6;
+  border-radius: 8px;
+  background:
+    linear-gradient(180deg, #0b66d8, #063c99),
+    #0a4fb6;
+  box-shadow:
+    0 18px 0 #052760,
+    0 24px 34px rgba(0, 0, 0, 0.36);
+  padding: clamp(8px, 1.4vw, 16px);
+}
+
+.connect4-slot {
+  display: grid;
+  place-items: center;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 50% 56%, rgba(2, 11, 22, 0.94) 0 56%, rgba(255, 255, 255, 0.12) 58% 62%, rgba(2, 11, 22, 0.9) 64%),
+    #04172d;
+  box-shadow: inset 0 5px 12px rgba(0, 0, 0, 0.55);
+}
+
+.connect4-slot.filled {
+  animation: discDrop 220ms ease-out;
+}
+
+.connect4-slot.filled.player-0 {
+  background: radial-gradient(circle at 34% 28%, #ffb0a6, #e6272f 48%, #7a0710 82%);
+}
+
+.connect4-slot.filled.player-1 {
+  background: radial-gradient(circle at 34% 28%, #fff2a6, #f3c91d 50%, #8a6900 82%);
+}
+
+.connect4-slot.last {
+  outline: 4px solid #ffffff;
+  outline-offset: -4px;
+}
+
+.connect4-slot.winning {
+  box-shadow:
+    0 0 0 4px #38ffc8,
+    0 0 24px rgba(56, 255, 200, 0.72);
+}
+
+.connect4-slot span {
+  color: rgba(255, 255, 255, 0.72);
+  font-size: clamp(14px, 2vw, 24px);
+  font-weight: 900;
+}
+
+.connect4-players,
+.connect4-move-list {
+  display: grid;
+  gap: 10px;
+}
+
+.connect4-player,
+.valid-columns,
+.connect4-move-row {
+  border: 1px solid rgba(132, 153, 147, 0.22);
+  border-radius: 8px;
+  background: rgba(6, 17, 19, 0.86);
+  padding: 12px;
+}
+
+.connect4-player {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+}
+
+.connect4-player.active {
+  border-color: #ffffff;
+}
+
+.connect4-player.winner {
+  border-color: #38ffc8;
+}
+
+.disc-swatch {
+  width: 36px;
+  aspect-ratio: 1;
+  border-radius: 50%;
+}
+
+.connect4-player.player-0 .disc-swatch {
+  background: radial-gradient(circle at 34% 28%, #ffb0a6, #e6272f 48%, #7a0710 82%);
+}
+
+.connect4-player.player-1 .disc-swatch {
+  background: radial-gradient(circle at 34% 28%, #fff2a6, #f3c91d 50%, #8a6900 82%);
+}
+
+.connect4-player code {
+  display: block;
+  color: #9fb8b3;
+}
+
+.valid-columns span,
+.connect4-move-row small {
+  color: #8da49f;
+}
+
+.connect4-move-row {
+  display: grid;
+  grid-template-columns: minmax(120px, 1fr) auto auto;
+  gap: 10px;
+}
+
 .game-evidence-layout {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -794,10 +952,21 @@ code {
   }
 }
 
+@keyframes discDrop {
+  from {
+    transform: translateY(-18px);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
 @media (max-width: 1120px) {
   .landing,
   .detail-band,
   .info-grid,
+  .connect4-header,
+  .connect4-layout,
   .game-evidence-layout,
   .active-match-card {
     grid-template-columns: 1fr;
@@ -853,6 +1022,8 @@ code {
 
   .funding-row,
   .summary-row,
+  .connect4-status,
+  .connect4-move-row,
   .bid-card {
     grid-template-columns: 1fr;
     flex-direction: column;

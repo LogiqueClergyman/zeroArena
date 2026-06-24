@@ -33,6 +33,7 @@ export interface ValidationResult {
 
 export interface TerminationResult {
   finished: boolean;
+  outcome?: "winner" | "draw";
   winner?: PlayerId;
   reason?: string;
 }
@@ -69,16 +70,19 @@ export interface MatchReceipt {
   rulesHash: string;
   rulesUrl: string;
   rulesVersion: string;
-  winner: PlayerId;
+  outcome: "winner" | "draw";
+  winner?: PlayerId;
   archiveHash: string;
   archiveUrl?: string;
   payoutTxHash?: string;
+  refundTxHashes?: FundingTxReceipt[];
   prizePoolAddress: string;
   stakeWei: string;
   totalPoolWei: string;
   fundingTxHashes: FundingTxReceipt[];
-  winnerWalletAddress: string;
-  payoutAmountWei: string;
+  winnerWalletAddress?: string;
+  payoutAmountWei?: string;
+  refundAmountWei?: string;
   payoutMode: "contract";
   archiveMode: "mock" | "0g";
   agentInference: AgentInferenceSummary[];

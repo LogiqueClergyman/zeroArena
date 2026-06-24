@@ -50,6 +50,79 @@ describe("PrizePool", function () {
     expect(await prizePool.isFullyFunded(matchId)).to.equal(true);
   });
 
+  it("refunds a draw to both funded players and emits refund events", async function () {
+    const { prizePool, alpha, beta, matchId, stake } = await deployFixture();
+    await prizePool.connect(alpha).fund(matchId, { value: stake });
+    await prizePool.connect(beta).fund(matchId, { value: stake });
+    const storageHash = ethers.keccak256(ethers.toUtf8Bytes("draw archive"));
+
+    await expect(() => prizePool.refundDraw(matchId, storageHash)).to.changeEtherBalances(
+      [alpha, beta],
+      [stake, stake],
+    );
+    await expect(prizePool.refundDraw(matchId, storageHash)).to.be.revertedWith(
+      "already finalized",
+    );
+  });
+
+  it("emits MatchRefunded and PlayerRefunded for a draw", async function () {
+    const { prizePool, alpha, beta, matchId, stake } = await deployFixture();
+    await prizePool.connect(alpha).fund(matchId, { value: stake });
+    await prizePool.connect(beta).fund(matchId, { value: stake });
+    const storageHash = ethers.keccak256(ethers.toUtf8Bytes("draw archive"));
+
+    await expect(prizePool.refundDraw(matchId, storageHash))
+      .to.emit(prizePool, "MatchRefunded")
+      .withArgs(matchId, storageHash)
+      .and.to.emit(prizePool, "PlayerRefunded")
+      .withArgs(matchId, alpha.address, stake)
+      .and.to.emit(prizePool, "PlayerRefunded")
+      .withArgs(matchId, beta.address, stake);
+  });
+
+  it("cannot refund before full funding", async function () {
+    const { prizePool, alpha, matchId, stake } = await deployFixture();
+    await prizePool.connect(alpha).fund(matchId, { value: stake });
+
+    await expect(
+      prizePool.refundDraw(matchId, ethers.keccak256(ethers.toUtf8Bytes("archive"))),
+    ).to.be.revertedWith("not fully funded");
+  });
+
+  it("cannot payout after refund or refund after payout", async function () {
+    const { prizePool, alpha, beta, matchId, stake } = await deployFixture();
+    await prizePool.connect(alpha).fund(matchId, { value: stake });
+    await prizePool.connect(beta).fund(matchId, { value: stake });
+    const storageHash = ethers.keccak256(ethers.toUtf8Bytes("archive"));
+
+    await prizePool.refundDraw(matchId, storageHash);
+    await expect(prizePool.payout(matchId, alpha.address, storageHash)).to.be.revertedWith(
+      "already finalized",
+    );
+
+    const nextMatchId = ethers.id("match_paid_first");
+    await prizePool.createMatch(nextMatchId, [alpha.address, beta.address], stake, ethers.id("rules"));
+    await prizePool.connect(alpha).fund(nextMatchId, { value: stake });
+    await prizePool.connect(beta).fund(nextMatchId, { value: stake });
+    await prizePool.payout(nextMatchId, alpha.address, storageHash);
+    await expect(prizePool.refundDraw(nextMatchId, storageHash)).to.be.revertedWith(
+      "already finalized",
+    );
+  });
+
+  it("rejects zero storage hash for payout and draw refund", async function () {
+    const { prizePool, alpha, beta, matchId, stake } = await deployFixture();
+    await prizePool.connect(alpha).fund(matchId, { value: stake });
+    await prizePool.connect(beta).fund(matchId, { value: stake });
+
+    await expect(prizePool.refundDraw(matchId, ethers.ZeroHash)).to.be.revertedWith(
+      "zero storage hash",
+    );
+    await expect(prizePool.payout(matchId, alpha.address, ethers.ZeroHash)).to.be.revertedWith(
+      "zero storage hash",
+    );
+  });
+
   it("refuses early payout before full funding", async function () {
     const { prizePool, alpha, matchId, stake } = await deployFixture();
     await prizePool.connect(alpha).fund(matchId, { value: stake });

@@ -1,26 +1,30 @@
+import { config as loadEnv } from "dotenv";
+import { resolve } from "node:path";
 import { AgentRunner } from "../agents/AgentRunner.js";
-import { createAggressiveAgent, createCautiousAgent } from "../agents/demoAgents.js";
+import { createConnect4Agent } from "../agents/connect4Agents.js";
 import { ZeroGServingProvider } from "../agents/providers/ZeroGServingProvider.js";
 import { MatchCoordinator } from "../core/MatchCoordinator.js";
 import type { MatchReceipt, Player } from "../core/types.js";
-import { SovereignBluff } from "../games/SovereignBluff.js";
+import { Connect4 } from "../games/Connect4.js";
 import { ContractPrizePoolAdapter } from "../integrations/ContractPrizePoolAdapter.js";
 import { ZeroGStorageAdapter } from "../integrations/ZeroGStorageAdapter.js";
-import { validateStartup } from "../server.js";
 
-export interface RealInferenceHarnessResult {
+loadEnv({ path: resolve(process.cwd(), ".env") });
+
+export interface RealInferenceConnect4HarnessResult {
   matchId: string;
-  winner: string;
-  roundsCompleted: number;
+  outcome: "winner" | "draw";
+  winner?: string;
+  movesCompleted: number;
   receipt: MatchReceipt;
   coordinator: MatchCoordinator;
   runner: AgentRunner;
 }
 
-export async function runRealInferenceSovereignBluffE2E(
+export async function runRealInferenceConnect4E2E(
   env: NodeJS.ProcessEnv = process.env,
-): Promise<RealInferenceHarnessResult> {
-  validateRealInferenceEnv(env);
+): Promise<RealInferenceConnect4HarnessResult> {
+  validateRealInferenceConnect4Env(env);
 
   const players: Player[] = [
     {
@@ -42,7 +46,7 @@ export async function runRealInferenceSovereignBluffE2E(
     ownerPrivateKey: env.EVM_PRIVATE_KEY ?? "",
     prizePoolAddress: env.PRIZE_POOL_ADDRESS ?? "",
     stakeWei: env.MATCH_STAKE_WEI ?? "",
-    rulesHash: env.SOVEREIGN_BLUFF_RULEBOOK_HASH ?? "",
+    rulesHash: env.CONNECT4_RULEBOOK_HASH ?? "",
     expectedChainId: BigInt(env.EVM_CHAIN_ID ?? "16602"),
     privateKeysByRef: {
       AGENT_ALPHA_PRIVATE_KEY: env.AGENT_ALPHA_PRIVATE_KEY,
@@ -50,7 +54,7 @@ export async function runRealInferenceSovereignBluffE2E(
     },
   });
   const coordinator = new MatchCoordinator({
-    engines: [new SovereignBluff()],
+    engines: [new Connect4()],
     archive: new ZeroGStorageAdapter({
       evmRpcUrl: env.ZERO_G_STORAGE_RPC ?? env.EVM_RPC_URL ?? "",
       privateKey: env.ZERO_G_STORAGE_PRIVATE_KEY ?? "",
@@ -59,11 +63,11 @@ export async function runRealInferenceSovereignBluffE2E(
     }),
     prizePool,
     rulebook: {
-      rulesHash: env.SOVEREIGN_BLUFF_RULEBOOK_HASH ?? "",
-      rulesUrl: env.SOVEREIGN_BLUFF_RULEBOOK_URL ?? "",
-      rulesVersion: env.SOVEREIGN_BLUFF_RULEBOOK_VERSION ?? "",
+      rulesHash: env.CONNECT4_RULEBOOK_HASH ?? "",
+      rulesUrl: env.CONNECT4_RULEBOOK_URL ?? "",
+      rulesVersion: env.CONNECT4_RULEBOOK_VERSION ?? "",
     },
-    idFactory: () => `match_real_${Date.now().toString(36)}`,
+    idFactory: () => `match_connect4_real_${Date.now().toString(36)}`,
   });
   const provider = new ZeroGServingProvider({
     rpcUrl: env.ZERO_G_EVM_RPC_URL ?? env.EVM_RPC_URL ?? "https://evmrpc-testnet.0g.ai",
@@ -71,7 +75,7 @@ export async function runRealInferenceSovereignBluffE2E(
     model: env.ZERO_G_SERVING_MODEL,
     autoFundBufferMultiplier: Number(env.ZERO_G_AUTO_FUND_BUFFER_MULTIPLIER ?? 1),
     requestSpacingMs: Number(env.ZERO_G_INFERENCE_REQUEST_SPACING_MS ?? 7000),
-    temperature: Number(env.ZERO_G_INFERENCE_TEMPERATURE ?? 0.85),
+    temperature: Number(env.ZERO_G_INFERENCE_TEMPERATURE ?? 0.35),
     topP: Number(env.ZERO_G_INFERENCE_TOP_P ?? 0.9),
     privateKeysByRef: {
       AGENT_ALPHA_PRIVATE_KEY: env.AGENT_ALPHA_PRIVATE_KEY ?? "",
@@ -79,73 +83,90 @@ export async function runRealInferenceSovereignBluffE2E(
     },
   });
   const validatorRunner = new AgentRunner(coordinator, []);
-  const agents = [
-    createCautiousAgent({
-      playerId: players[0].id,
-      walletAddress: players[0].walletAddress,
-      privateKeyRef: "AGENT_ALPHA_PRIVATE_KEY",
+  const agents = players.map((player, index) =>
+    createConnect4Agent({
+      playerId: player.id,
+      name: index === 0 ? "Alpha" : "Beta",
+      walletAddress: player.walletAddress,
+      privateKeyRef: index === 0 ? "AGENT_ALPHA_PRIVATE_KEY" : "AGENT_BETA_PRIVATE_KEY",
       provider,
       allowMockFallback: false,
       validatorForSchema: (schema) => validatorRunner.validatorForSchema(schema),
     }),
-    createAggressiveAgent({
-      playerId: players[1].id,
-      walletAddress: players[1].walletAddress,
-      privateKeyRef: "AGENT_BETA_PRIVATE_KEY",
-      provider,
-      allowMockFallback: false,
-      validatorForSchema: (schema) => validatorRunner.validatorForSchema(schema),
-    }),
-  ];
+  );
   const runner = new AgentRunner(coordinator, agents, {
     turnDelayInMs: Number(env.REAL_INFERENCE_TURN_DELAY_MS ?? 7_000),
   });
 
-  const match = coordinator.createMatch("sovereign-bluff", players);
-  await prizePool.createAndFund({ matchId: match.id, players });
+  const match = coordinator.createMatch("connect4", players);
+  await prizePool.createAndFund({
+    matchId: match.id,
+    players,
+    rulesHash: env.CONNECT4_RULEBOOK_HASH ?? "",
+  });
   await coordinator.activateMatch(match.id);
 
   const result = await runner.run(match.id);
   const paidMatch = coordinator.getMatch(match.id);
   const receipt = result.receipt ?? coordinator.getReceipt(match.id);
   if (!paidMatch || paidMatch.status !== "paid" || !receipt) {
-    throw new Error("Real inference Sovereign Bluff E2E did not produce a paid receipt");
+    throw new Error("Real inference Connect4 E2E did not produce a paid receipt");
+  }
+  if (receipt.gameId !== "connect4") {
+    throw new Error(`Real inference Connect4 E2E produced wrong game receipt: ${receipt.gameId}`);
+  }
+  if (receipt.rulesHash !== env.CONNECT4_RULEBOOK_HASH) {
+    throw new Error("Real inference Connect4 E2E receipt rulesHash does not match CONNECT4_RULEBOOK_HASH");
   }
   if (receipt.agentInference.some((summary) => summary.mode !== "0g-serving")) {
-    throw new Error("Real inference E2E used a non-0G inference mode");
+    throw new Error("Real inference Connect4 E2E used a non-0G inference mode");
   }
   if (receipt.agentInference.some((summary) => summary.fallbackTurns !== 0)) {
-    throw new Error("Real inference E2E recorded fallback turns");
+    throw new Error("Real inference Connect4 E2E recorded fallback turns");
   }
-  if (!receipt.winner) {
-    throw new Error("Real Sovereign Bluff E2E did not produce a winner");
+  if (receipt.outcome === "winner" && !receipt.payoutTxHash) {
+    throw new Error("Real inference Connect4 winner match is missing payout transaction hash");
+  }
+  if (receipt.outcome === "draw" && (!receipt.refundTxHashes || receipt.refundTxHashes.length !== players.length)) {
+    throw new Error("Real inference Connect4 draw match is missing refund transaction hashes");
   }
 
   return {
     matchId: match.id,
+    outcome: receipt.outcome,
     winner: receipt.winner,
-    roundsCompleted: paidMatch.state.round,
+    movesCompleted: coordinator.getHistory(match.id).length,
     receipt,
     coordinator,
     runner,
   };
 }
 
-function validateRealInferenceEnv(env: NodeJS.ProcessEnv): void {
-  validateStartup({
-    ...env,
-    LOCAL_DEV_ALLOW_MOCKS: "false",
-    AGENT_INFERENCE_MODE: "0g-serving",
-    ARCHIVE_MODE: "0g",
-    PAYOUT_MODE: "contract",
-  });
+function validateRealInferenceConnect4Env(env: NodeJS.ProcessEnv): void {
   if (env.AGENT_INFERENCE_MODE !== "0g-serving") {
-    throw new Error("Real inference E2E requires AGENT_INFERENCE_MODE=0g-serving");
+    throw new Error("Real inference Connect4 E2E requires AGENT_INFERENCE_MODE=0g-serving");
   }
   if (env.ARCHIVE_MODE !== "0g") {
-    throw new Error("Real inference E2E requires ARCHIVE_MODE=0g");
+    throw new Error("Real inference Connect4 E2E requires ARCHIVE_MODE=0g");
   }
   if ((env.PAYOUT_MODE ?? "contract") !== "contract") {
-    throw new Error("Real inference E2E requires PAYOUT_MODE=contract");
+    throw new Error("Real inference Connect4 E2E requires PAYOUT_MODE=contract");
+  }
+  const missing = [
+    "EVM_RPC_URL",
+    "EVM_PRIVATE_KEY",
+    "PRIZE_POOL_ADDRESS",
+    "MATCH_STAKE_WEI",
+    "ZERO_G_STORAGE_PRIVATE_KEY",
+    "AGENT_ALPHA_WALLET_ADDRESS",
+    "AGENT_ALPHA_PRIVATE_KEY",
+    "AGENT_BETA_WALLET_ADDRESS",
+    "AGENT_BETA_PRIVATE_KEY",
+    "CONNECT4_RULEBOOK_HASH",
+    "CONNECT4_RULEBOOK_URL",
+    "CONNECT4_RULEBOOK_VERSION",
+  ].filter((key) => !env[key]);
+  if (missing.length) {
+    throw new Error(`Real inference Connect4 E2E requires live env: missing ${missing.join(", ")}`);
   }
 }

@@ -7,8 +7,9 @@ const PRIZE_POOL_ABI = [
   "function fund(bytes32 matchId) payable",
   "function isFullyFunded(bytes32 matchId) view returns (bool)",
   "function fundedAmount(bytes32 matchId,address player) view returns (uint256)",
-  "function matches(bytes32 matchId) view returns (uint256 requiredStake,uint256 totalStake,bool paid,bytes32 storageHash,address winner,bytes32 rulesHash)",
+  "function matches(bytes32 matchId) view returns (uint256 requiredStake,uint256 totalStake,bool paid,bool refunded,bytes32 storageHash,address winner,bytes32 rulesHash)",
   "function payout(bytes32 matchId,address winner,bytes32 storageHash)",
+  "function refundDraw(bytes32 matchId,bytes32 storageHash)",
 ];
 
 export interface ContractPrizePoolAdapterOptions {
@@ -29,6 +30,7 @@ export class ContractPrizePoolAdapter implements PrizePoolAdapter {
   private readonly fundingTxHashes = new Map<string, PrizePoolSnapshot["fundingTxHashes"]>();
   private readonly playersByMatch = new Map<string, Array<{ playerId?: string; walletAddress: string }>>();
   private readonly creationTxHashes = new Map<string, string>();
+  private readonly rulesHashByMatch = new Map<string, string>();
 
   constructor(private readonly options: ContractPrizePoolAdapterOptions) {
     if (!options.rpcUrl) {
@@ -44,7 +46,7 @@ export class ContractPrizePoolAdapter implements PrizePoolAdapter {
       throw new Error("MATCH_STAKE_WEI is required for PAYOUT_MODE=contract");
     }
     if (!options.rulesHash) {
-      throw new Error("SOVEREIGN_BLUFF_RULEBOOK_HASH is required for PAYOUT_MODE=contract");
+      throw new Error("A rulebook hash is required for PAYOUT_MODE=contract");
     }
     if (!/^0x[0-9a-fA-F]{64}$/.test(options.rulesHash)) {
       throw new Error("SOVEREIGN_BLUFF_RULEBOOK_HASH must be a bytes32 hex value");
@@ -65,14 +67,19 @@ export class ContractPrizePoolAdapter implements PrizePoolAdapter {
   async createAndFund(input: {
     matchId: string;
     players: Player[];
+    rulesHash?: string;
   }): Promise<PrizePoolSnapshot> {
     await this.assertExpectedChain();
     await this.createPool({
       matchId: input.matchId,
       players: input.players.map((player) => ({ walletAddress: player.walletAddress })),
       stakeWei: this.options.stakeWei,
-      rulesHash: this.options.rulesHash,
+      rulesHash: input.rulesHash ?? this.options.rulesHash,
     });
+    this.playersByMatch.set(
+      input.matchId,
+      input.players.map((player) => ({ playerId: player.id, walletAddress: player.walletAddress })),
+    );
     for (const player of input.players) {
       await this.fundPool({
         matchId: input.matchId,
@@ -98,12 +105,13 @@ export class ContractPrizePoolAdapter implements PrizePoolAdapter {
     const matchKey = matchIdToBytes32(input.matchId);
     const wallets = input.players.map((player) => ethers.getAddress(player.walletAddress));
     const rulesHash = input.rulesHash ?? this.options.rulesHash;
-    if (rulesHash !== this.options.rulesHash) {
-      throw new Error("createPool rulesHash does not match configured SOVEREIGN_BLUFF_RULEBOOK_HASH");
+    if (!/^0x[0-9a-fA-F]{64}$/.test(rulesHash)) {
+      throw new Error("createPool rulesHash must be a bytes32 hex value");
     }
     const tx = await this.contract.createMatch(matchKey, wallets, input.stakeWei, rulesHash);
     await tx.wait();
     this.creationTxHashes.set(input.matchId, tx.hash);
+    this.rulesHashByMatch.set(input.matchId, rulesHash);
     this.playersByMatch.set(input.matchId, wallets.map((walletAddress) => ({ walletAddress })));
     return { txHash: tx.hash };
   }
@@ -149,9 +157,10 @@ export class ContractPrizePoolAdapter implements PrizePoolAdapter {
       throw new Error(`PrizePool match pool does not exist for ${input.matchId}`);
     }
     const fullyFunded = await this.contract.isFullyFunded(matchKey);
-    if (matchData.rulesHash !== this.options.rulesHash) {
+    const expectedRulesHash = this.rulesHashByMatch.get(input.matchId) ?? this.options.rulesHash;
+    if (matchData.rulesHash !== expectedRulesHash) {
       throw new Error(
-        `PrizePool rulesHash mismatch: expected ${this.options.rulesHash}, got ${matchData.rulesHash}`,
+        `PrizePool rulesHash mismatch: expected ${expectedRulesHash}, got ${matchData.rulesHash}`,
       );
     }
     return {
@@ -160,7 +169,7 @@ export class ContractPrizePoolAdapter implements PrizePoolAdapter {
       totalPoolWei: matchData.totalStake.toString(),
       rulesHash: matchData.rulesHash,
       fullyFunded,
-      paid: matchData.paid,
+      paid: matchData.paid || matchData.refunded,
       fundingTxHashes: this.fundingTxHashes.get(input.matchId) ?? [],
       poolCreationTxHash: this.creationTxHashes.get(input.matchId),
     };
@@ -186,6 +195,44 @@ export class ContractPrizePoolAdapter implements PrizePoolAdapter {
     } catch (error) {
       return {
         txHash: "",
+        amountWei: "0",
+        status: "failed",
+        error: error instanceof Error ? error.message : String(error),
+      };
+    }
+  }
+
+  async refundDraw(input: {
+    matchId: string;
+    archiveHash: string;
+  }): Promise<{
+    txHashes: PrizePoolSnapshot["fundingTxHashes"];
+    amountWei: string;
+    status: "refunded" | "failed";
+    error?: string;
+  }> {
+    const pool = await this.getPool({ matchId: input.matchId });
+    if (!pool.fullyFunded) {
+      return { txHashes: [], amountWei: "0", status: "failed", error: "pool is not fully funded" };
+    }
+    try {
+      const tx = await this.contract.refundDraw(
+        matchIdToBytes32(input.matchId),
+        archiveHashToBytes32(input.archiveHash),
+      );
+      await tx.wait();
+      const players = this.playersByMatch.get(input.matchId) ?? [];
+      const amountWei = pool.stakeWei;
+      const txHashes = players.map((player, index) => ({
+        playerId: player.playerId ?? `player_${index + 1}`,
+        walletAddress: player.walletAddress,
+        txHash: tx.hash,
+        amountWei,
+      }));
+      return { txHashes, amountWei, status: "refunded" };
+    } catch (error) {
+      return {
+        txHashes: [],
         amountWei: "0",
         status: "failed",
         error: error instanceof Error ? error.message : String(error),

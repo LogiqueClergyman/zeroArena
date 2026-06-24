@@ -1,0 +1,37 @@
+{
+  "gameId": "connect4",
+  "name": "Connect4",
+  "version": "1.0.0",
+  "players": {
+    "min": 2,
+    "max": 2
+  },
+  "board": {
+    "columns": 7,
+    "rows": 6
+  },
+  "actionSchema": {
+    "type": "object",
+    "properties": {
+      "column": {
+        "type": "number",
+        "minimum": 0,
+        "maximum": 6
+      }
+    },
+    "required": ["column"],
+    "additionalProperties": false
+  },
+  "rules": [
+    "Players alternate turns dropping one disc into a selected column.",
+    "Gravity applies: each disc occupies the lowest empty row in the selected column.",
+    "A move into a full column is invalid.",
+    "The first player to connect four discs horizontally, vertically, or diagonally wins.",
+    "If the board fills without a four-in-a-row, the game is a draw."
+  ],
+  "drawTiebreak": {
+    "outcome": "draw",
+    "settlement": "Refund both funded participants. Do not select a deterministic player-order winner."
+  },
+  "prizePoolLifecycle": "Players fund the configured PrizePool stake before play. After completion, the backend archives match history to 0G Storage, then submits either winner payout or draw refund through the deployed PrizePool contract using the archive hash as final evidence."
+}

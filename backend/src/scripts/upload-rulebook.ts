@@ -16,7 +16,23 @@ if (required.length) {
   throw new Error(`Missing required env for rulebook upload: ${required.join(", ")}`);
 }
 
-const rulebookPath = resolve(process.cwd(), "rulebooks", "sovereign-bluff.v1.json");
+const gameId = process.env.GAME_ID ?? process.argv[2] ?? "sovereign-bluff";
+const rulebookByGame: Record<string, { path: string; envPrefix: string }> = {
+  "sovereign-bluff": {
+    path: "sovereign-bluff.v1.json",
+    envPrefix: "SOVEREIGN_BLUFF",
+  },
+  connect4: {
+    path: "connect4.v1.json",
+    envPrefix: "CONNECT4",
+  },
+};
+const selected = rulebookByGame[gameId];
+if (!selected) {
+  throw new Error(`Unknown GAME_ID for rulebook upload: ${gameId}`);
+}
+
+const rulebookPath = resolve(process.cwd(), "rulebooks", selected.path);
 if (!existsSync(rulebookPath)) {
   throw new Error(`Rulebook file not found: ${rulebookPath}`);
 }
@@ -46,9 +62,9 @@ try {
     throw new Error(`0G Storage upload did not return a root hash; local root was ${tree?.rootHash()}`);
   }
 
-  console.log(`SOVEREIGN_BLUFF_RULEBOOK_HASH=${rootHash}`);
+  console.log(`${selected.envPrefix}_RULEBOOK_HASH=${rootHash}`);
   console.log(
-    `SOVEREIGN_BLUFF_RULEBOOK_URL=Download with 0G Storage SDK Indexer.download(${rootHash}, outputPath, true) via ${indexerRpc}`,
+    `${selected.envPrefix}_RULEBOOK_URL=Download with 0G Storage SDK Indexer.download(${rootHash}, outputPath, true) via ${indexerRpc}`,
   );
 } finally {
   await file.close();

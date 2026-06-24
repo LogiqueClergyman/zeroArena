@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { Connect4, type Connect4Board } from "../games/Connect4.js";
 import { SovereignBluff } from "../games/SovereignBluff.js";
 import {
   MatchCoordinator,
@@ -74,6 +75,9 @@ function coordinator(input: {
         async payoutWinner() {
           return { txHash: "0xpayout", amountWei: "2000", status: "paid" };
         },
+        async refundDraw() {
+          return { txHashes: [], amountWei: "1000", status: "refunded" };
+        },
       } satisfies PrizePoolGateway),
     rulebook: {
       rulesHash: "0x1111111111111111111111111111111111111111111111111111111111111111",
@@ -117,6 +121,9 @@ test("coordinator cannot activate a match before prize pool is fully funded", as
       },
       async payoutWinner() {
         return { txHash: "0xpayout", amountWei: "2000", status: "paid" };
+      },
+      async refundDraw() {
+        return { txHashes: [], amountWei: "1000", status: "refunded" };
       },
     },
   });
@@ -190,6 +197,9 @@ test("coordinator refuses final receipt when prize pool rules hash mismatches", 
       async payoutWinner() {
         return { txHash: "0xpayout", amountWei: "2000", status: "paid" };
       },
+      async refundDraw() {
+        return { txHashes: [], amountWei: "1000", status: "refunded" };
+      },
     },
   });
   subject.createMatch("sovereign-bluff", players);
@@ -208,6 +218,9 @@ test("coordinator refuses final receipt without funding transaction hashes", asy
       async payoutWinner() {
         return { txHash: "0xpayout", amountWei: "2000", status: "paid" };
       },
+      async refundDraw() {
+        return { txHashes: [], amountWei: "1000", status: "refunded" };
+      },
     },
   });
   subject.createMatch("sovereign-bluff", players);
@@ -225,10 +238,72 @@ test("coordinator refuses final receipt without payout amount or payout tx hash"
       async payoutWinner() {
         return { txHash: "", amountWei: "", status: "paid" };
       },
+      async refundDraw() {
+        return { txHashes: [], amountWei: "1000", status: "refunded" };
+      },
     },
   });
   subject.createMatch("sovereign-bluff", players);
   await subject.activateMatch("match_test");
 
   await assert.rejects(() => playFiveRounds(subject), /payout amount|payout transaction/i);
+});
+
+test("coordinator finalizes Connect4 draws through refund path", async () => {
+  const subject = new MatchCoordinator({
+    engines: [new Connect4()],
+    archive: {
+      mode: "mock",
+      async archiveMatch() {
+        return { archiveHash: "mock-0g-connect4-draw", url: "mock://connect4-draw" };
+      },
+    },
+    prizePool: {
+      mode: "contract",
+      async getPool() {
+        return poolStatus({ paid: true, rulesHash: "0x2222222222222222222222222222222222222222222222222222222222222222" });
+      },
+      async payoutWinner() {
+        throw new Error("draw must not call winner payout");
+      },
+      async refundDraw() {
+        return {
+          txHashes: [
+            { playerId: "alpha", walletAddress: "0xalpha", txHash: "0xrefund", amountWei: "1000" },
+            { playerId: "beta", walletAddress: "0xbeta", txHash: "0xrefund", amountWei: "1000" },
+          ],
+          amountWei: "1000",
+          status: "refunded",
+        };
+      },
+    },
+    rulebook: {
+      rulesHash: "0x2222222222222222222222222222222222222222222222222222222222222222",
+      rulesUrl: "mock://rulebook/connect4.v1.json",
+      rulesVersion: "1.0.0",
+    },
+    idFactory: () => "match_test",
+    now: () => new Date("2026-06-24T00:00:00.000Z"),
+  });
+  const match = subject.createMatch("connect4", players);
+  const board = match.state.board as Connect4Board;
+  board.grid = [
+    ["alpha", "alpha", "beta", "beta", "alpha", "alpha", null],
+    ["beta", "beta", "alpha", "alpha", "beta", "beta", "alpha"],
+    ["alpha", "alpha", "beta", "beta", "alpha", "alpha", "beta"],
+    ["beta", "beta", "alpha", "alpha", "beta", "beta", "alpha"],
+    ["alpha", "alpha", "beta", "beta", "alpha", "alpha", "beta"],
+    ["beta", "beta", "alpha", "alpha", "beta", "beta", "alpha"],
+  ];
+  board.currentPlayer = "alpha";
+  match.state.currentPlayer = "alpha";
+  await subject.activateMatch("match_test");
+
+  const result = await subject.submitMove("match_test", "alpha", { column: 6 });
+  const receipt = result.receipt;
+
+  assert.equal(receipt?.outcome, "draw");
+  assert.equal(receipt?.winner, undefined);
+  assert.equal(receipt?.refundTxHashes?.length, 2);
+  assert.equal(receipt?.payoutTxHash, undefined);
 });
