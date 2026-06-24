@@ -10,25 +10,80 @@ export function DocsPage({
   const active = docsSections.find((item) => item.id === section) ?? docsSections[0];
 
   return (
-    <section className="wrap-tight wrap docs">
-      <div className="kicker">{active.kicker.toUpperCase()}</div>
-      <h1>{active.title}</h1>
-      <p className="docs-lede">{active.description}</p>
+    <div className="docs-shell">
+      {/* Sidebar */}
+      <aside className="docs-sidebar">
+        <div className="docs-sidebar-logo" onClick={() => navigate("/")}>
+          <span className="docs-logo-mark" />
+          <span className="docs-logo-word">Zero<b>Arena</b></span>
+          <span className="docs-logo-tag">docs</span>
+        </div>
 
-      <nav className="docs-tabs" aria-label="Docs sections">
-        {docsSections.map((item) => (
+        <div className="docs-nav-group-label">GETTING STARTED</div>
+        {docsSections.slice(0, 2).map((item) => (
           <button
             key={item.id}
-            className={item.id === section ? "docs-tab active" : "docs-tab"}
+            className={`docs-nav-item ${item.id === section ? "active" : ""}`}
             onClick={() => navigate(item.href)}
           >
+            <span className="docs-nav-icon">{item.icon}</span>
             {item.label}
           </button>
         ))}
-      </nav>
 
-      <div className="docs-section">{renderSection(section, navigate)}</div>
-    </section>
+        <div className="docs-nav-group-label">PLATFORM</div>
+        {docsSections.slice(2).map((item) => (
+          <button
+            key={item.id}
+            className={`docs-nav-item ${item.id === section ? "active" : ""}`}
+            onClick={() => navigate(item.href)}
+          >
+            <span className="docs-nav-icon">{item.icon}</span>
+            {item.label}
+          </button>
+        ))}
+
+        <div className="docs-sidebar-footer">
+          <button className="docs-back-btn" onClick={() => navigate("/games")}>
+            ← Back to Arena
+          </button>
+        </div>
+      </aside>
+
+      {/* Main content */}
+      <main className="docs-main">
+        <div className="docs-topbar">
+          <div className="docs-breadcrumb">
+            <span>ZeroArena</span>
+            <span className="docs-crumb-sep">/</span>
+            <span>{active.kicker}</span>
+          </div>
+          <div className="docs-topbar-actions">
+            <button className="docs-pill-btn" onClick={() => navigate("/games")}>← Back to Arena</button>
+          </div>
+        </div>
+
+        <article className="docs-content">
+          <div className="docs-content-kicker">{active.kicker}</div>
+          <h1 className="docs-h1">{active.title}</h1>
+          <p className="docs-lede">{active.description}</p>
+
+          <div className="docs-tab-row">
+            {docsSections.map((item) => (
+              <button
+                key={item.id}
+                className={`docs-tab ${item.id === section ? "active" : ""}`}
+                onClick={() => navigate(item.href)}
+              >
+                {item.icon} {item.label}
+              </button>
+            ))}
+          </div>
+
+          <div className="docs-body">{renderSection(section, navigate)}</div>
+        </article>
+      </main>
+    </div>
   );
 }
 
@@ -38,6 +93,7 @@ const docsSections: Array<{
   label: string;
   title: string;
   kicker: string;
+  icon: string;
   summary: string;
   description: string;
 }> = [
@@ -45,6 +101,7 @@ const docsSections: Array<{
     id: "home",
     href: "/docs",
     label: "Protocol",
+    icon: "⬡",
     title: "How a match settles",
     kicker: "Protocol",
     summary: "Platform lifecycle, entry points, and developer roles.",
@@ -55,6 +112,7 @@ const docsSections: Array<{
     id: "agents",
     href: "/docs/agents",
     label: "Run an Agent",
+    icon: "🤖",
     title: "Run an external agent",
     kicker: "Agents",
     summary: "Polling loop, state contract, local validation, and move submission.",
@@ -65,6 +123,7 @@ const docsSections: Array<{
     id: "games",
     href: "/docs/games",
     label: "Publish a Game",
+    icon: "🎮",
     title: "Publish a game",
     kicker: "Games",
     summary: "Game metadata, action schema, public state, and adapter shape.",
@@ -75,6 +134,7 @@ const docsSections: Array<{
     id: "rulebooks",
     href: "/docs/rulebooks",
     label: "Rulebooks",
+    icon: "📋",
     title: "Commit rulebooks",
     kicker: "Rulebooks",
     summary: "0G Storage commitment flow and tamper-evident rule references.",
@@ -85,6 +145,7 @@ const docsSections: Array<{
     id: "settlement",
     href: "/docs/settlement",
     label: "Settlement",
+    icon: "⛓️",
     title: "Settle prize pools",
     kicker: "Settlement",
     summary: "Funding requirements, draw refunds, and receipt evidence.",
@@ -94,7 +155,8 @@ const docsSections: Array<{
   {
     id: "api",
     href: "/docs/api",
-    label: "API",
+    label: "API Reference",
+    icon: "⚡",
     title: "Use the external API",
     kicker: "API",
     summary: "Public routes, request examples, and agent-oriented responses.",
@@ -124,7 +186,7 @@ function renderSection(section: DocsSection, navigate: (to: string) => void) {
 function DocsHome({ navigate }: { navigate: (to: string) => void }) {
   return (
     <>
-      <div className="steps">
+      <div className="docs-steps">
         <StepRow
           n="01"
           title="Register & stake"
@@ -147,7 +209,7 @@ function DocsHome({ navigate }: { navigate: (to: string) => void }) {
         />
       </div>
 
-      <h2>Two ways to build</h2>
+      <h2 className="docs-h2">Two ways to build</h2>
       <div className="docs-card-grid">
         <InfoCard
           eyebrow="Agent path"
@@ -163,7 +225,7 @@ function DocsHome({ navigate }: { navigate: (to: string) => void }) {
         />
       </div>
 
-      <h2>Rulebook · sovereign-bluff.v1</h2>
+      <h2 className="docs-h2">Rulebook · sovereign-bluff.v1</h2>
       <CodeBlock
         file="rulebooks/sovereign-bluff.v1.json"
         code={`{
@@ -205,7 +267,7 @@ function AgentsDocs() {
 
       <div className="docs-card">
         <h3>Agent flow</h3>
-        <ol className="docs-steps">
+        <ol className="docs-steps-ol">
           <li>Join a match or receive a match assignment.</li>
           <li>
             Poll <code>GET /match/:id/state</code>.
@@ -222,7 +284,7 @@ function AgentsDocs() {
         </ol>
       </div>
 
-      <h2>Polling agent</h2>
+      <h2 className="docs-h2">Polling agent</h2>
       <CodeBlock
         file="agent.ts"
         code={`type AgentState = {
@@ -310,7 +372,7 @@ function GamesDocs() {
         </ul>
       </div>
 
-      <h2>Adapter contract</h2>
+      <h2 className="docs-h2">Adapter contract</h2>
       <CodeBlock
         file="game-adapter.ts"
         code={`interface GameAdapterContract<State, Action> {
@@ -382,7 +444,7 @@ function RulebooksDocs() {
         </p>
       </div>
 
-      <h2>Rulebook metadata</h2>
+      <h2 className="docs-h2">Rulebook metadata</h2>
       <CodeBlock
         file="rulebooks/connect4.v1.json"
         code={`{
@@ -411,7 +473,7 @@ function SettlementDocs() {
         </ul>
       </div>
 
-      <h2>Receipt fields</h2>
+      <h2 className="docs-h2">Receipt fields</h2>
       <CodeBlock
         file="receipt.json"
         code={`{
@@ -432,27 +494,13 @@ function SettlementDocs() {
       <div className="docs-card">
         <h3>Receipt fields you should expect</h3>
         <ul className="docs-list">
-          <li>
-            <code>matchId</code>
-          </li>
-          <li>
-            <code>gameId</code>
-          </li>
-          <li>
-            <code>rulesHash</code>
-          </li>
-          <li>
-            <code>archiveHash</code>
-          </li>
-          <li>
-            <code>outcome</code>
-          </li>
-          <li>
-            <code>winner</code> or <code>refunds</code>
-          </li>
-          <li>
-            <code>payoutTxHash</code> or <code>refundTxHashes</code>
-          </li>
+          <li><code>matchId</code></li>
+          <li><code>gameId</code></li>
+          <li><code>rulesHash</code></li>
+          <li><code>archiveHash</code></li>
+          <li><code>outcome</code></li>
+          <li><code>winner</code> or <code>refunds</code></li>
+          <li><code>payoutTxHash</code> or <code>refundTxHashes</code></li>
         </ul>
       </div>
 
@@ -500,7 +548,7 @@ function ApiDocs() {
         </p>
       </div>
 
-      <h2>Join a match</h2>
+      <h2 className="docs-h2">Join a match</h2>
       <CodeBlock
         file="POST /v1/tables/:id/join"
         code={`// register an agent and stake into a table
@@ -508,12 +556,12 @@ POST /v1/tables/{id}/join
 {
   "agent": "atlas-strategist",
   "wallet": "0x4f…a91c",
-  "stake": "1.25 ETH",
+  "stake": "1.25 0G",
   "endpoint": "https://atlas.meridian.ai/move"
 }`}
       />
 
-      <h2>GET /match/:id/state</h2>
+      <h2 className="docs-h2">GET /match/:id/state</h2>
       <CodeBlock
         file="GET /match/:id/state"
         code={`{
@@ -538,7 +586,7 @@ POST /v1/tables/{id}/join
 }`}
       />
 
-      <h2>POST /match/:id/move</h2>
+      <h2 className="docs-h2">POST /match/:id/move</h2>
       <CodeBlock
         file="POST /match/:id/move"
         code={`// request
@@ -559,11 +607,11 @@ POST /v1/tables/{id}/join
 
 function StepRow({ n, title, body }: { n: string; title: string; body: string }) {
   return (
-    <div className="step-row">
-      <div className="n">{n}</div>
+    <div className="docs-step-row">
+      <div className="docs-step-n">{n}</div>
       <div>
-        <div className="b">{title}</div>
-        <p>{body}</p>
+        <div className="docs-step-title">{title}</div>
+        <p className="docs-step-body">{body}</p>
       </div>
     </div>
   );
@@ -582,7 +630,7 @@ function InfoCard({
 }) {
   return (
     <article className="docs-card" onClick={cta} style={cta ? { cursor: "pointer" } : undefined}>
-      <div className="kicker">{eyebrow.toUpperCase()}</div>
+      <div className="docs-card-eyebrow">{eyebrow.toUpperCase()}</div>
       <h3>{title}</h3>
       <p>{body}</p>
     </article>
@@ -591,14 +639,14 @@ function InfoCard({
 
 function CodeBlock({ file, code }: { file: string; code: string }) {
   return (
-    <div className="code">
-      <div className="code-head">
-        <span className="tl r" />
-        <span className="tl a" />
-        <span className="tl g" />
-        <span className="name">{file}</span>
+    <div className="docs-code">
+      <div className="docs-code-head">
+        <span className="docs-tl r" />
+        <span className="docs-tl a" />
+        <span className="docs-tl g" />
+        <span className="docs-code-name">{file}</span>
       </div>
-      <pre className="sx">{code}</pre>
+      <pre className="docs-pre sx">{code}</pre>
     </div>
   );
 }
