@@ -5,6 +5,12 @@ export interface LlmJsonStrategyOptions {
   walletAddress: string;
   privateKeyRef: string;
   userPrompt: string;
+  extraContext?(input: {
+    gameId: string;
+    publicState: unknown;
+    actionSchema: unknown;
+    playerId: string;
+  }): unknown;
   fallback?: AgentStrategy;
 }
 
@@ -33,6 +39,12 @@ export class LlmJsonStrategy implements AgentStrategy {
           publicState: input.publicState,
           actionSchema: input.actionSchema,
           validationError: input.validationError,
+          extraContext: this.options.extraContext?.({
+            gameId: input.gameId,
+            publicState: input.publicState,
+            actionSchema: input.actionSchema,
+            playerId: input.playerId,
+          }),
         }),
       });
       return {
@@ -72,6 +84,7 @@ function buildPrompt(input: {
   publicState: unknown;
   actionSchema: unknown;
   validationError?: string;
+  extraContext?: unknown;
 }): string {
   return [
     "USER_PROVIDED_AGENT_INSTRUCTIONS:",
@@ -81,13 +94,19 @@ function buildPrompt(input: {
     "Return exactly one legal JSON action object. Do not return markdown, code fences, comments, or prose.",
     "The JSON object must satisfy ACTION_SCHEMA_JSON and must be legal for PUBLIC_STATE_JSON.",
     input.validationError
-      ? `The previous action was rejected. Correct this error: ${input.validationError}`
+      ? `The previous action was rejected. You must choose a different legal action that fixes this exact error: ${input.validationError}`
+      : undefined,
+    input.validationError?.toLowerCase().includes("column is full")
+      ? "Hard constraint: the last chosen Connect4 column is full. Do not choose that column again; choose from PUBLIC_STATE_JSON.validColumns only."
       : undefined,
     "",
     "MATCH_CONTEXT:",
     `Game id: ${input.gameId}`,
     `Your player id: ${input.playerId}`,
     "Use player ids only to interpret the state; do not copy them into the action unless the schema requires it.",
+    input.extraContext === undefined ? undefined : "",
+    input.extraContext === undefined ? undefined : "DERIVED_STATE_CONTEXT_JSON:",
+    input.extraContext === undefined ? undefined : JSON.stringify(input.extraContext),
     "",
     "PUBLIC_STATE_JSON:",
     JSON.stringify(input.publicState),

@@ -44,7 +44,58 @@ export function chooseMove(publicState: unknown, playerId: string): { column: nu
     ? valid.filter((column) => !letsOpponentWin(board, column, playerId, opponent))
     : valid;
   const choices = safe.length ? safe : valid;
-  return { column: choices.sort((a, b) => Math.abs(a - 3) - Math.abs(b - 3))[0] };
+  return { column: bestPatternColumn(board, choices, playerId, opponent) };
+}
+
+function bestPatternColumn(
+  board: Array<Array<string | null>>,
+  valid: number[],
+  playerId: string,
+  opponent: string | undefined,
+): number {
+  return valid
+    .map((column) => ({ column, score: scoreColumn(board, column, playerId, opponent) }))
+    .sort((left, right) => right.score - left.score || left.column - right.column)[0].column;
+}
+
+function scoreColumn(
+  board: Array<Array<string | null>>,
+  column: number,
+  playerId: string,
+  opponent: string | undefined,
+): number {
+  const row = lowestOpenRow(board, column);
+  if (row === undefined) {
+    return Number.NEGATIVE_INFINITY;
+  }
+  const next = board.map((line) => [...line]);
+  next[row][column] = playerId;
+  const ownPotential = linePotential(next, row, column, playerId);
+  const opponentPotential = opponent ? linePotential(next, row, column, opponent) : 0;
+  const heightPenalty = board.length - 1 - row;
+  const centerPenalty = column === 3 ? 2 : 0;
+  return ownPotential * 10 + opponentPotential * 2 - heightPenalty - centerPenalty;
+}
+
+function linePotential(
+  board: Array<Array<string | null>>,
+  row: number,
+  column: number,
+  playerId: string,
+): number {
+  const directions = [
+    [0, 1],
+    [1, 0],
+    [1, 1],
+    [1, -1],
+  ] as const;
+  return Math.max(
+    ...directions.map(([rowDelta, columnDelta]) =>
+      1 +
+      countDirection(board, row, column, playerId, rowDelta, columnDelta) +
+      countDirection(board, row, column, playerId, -rowDelta, -columnDelta),
+    ),
+  );
 }
 
 function tacticalColumn(

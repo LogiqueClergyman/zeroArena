@@ -104,11 +104,13 @@ test("agent state requires bearer token for the requested player wallet", async 
     const alphaToken = await localDevToken(app, alphaWallet);
     const betaToken = await localDevToken(app, betaWallet);
 
-    await app.inject({
+    const firstJoin = await app.inject({
       method: "POST",
       url: "/lobby/join",
       payload: { gameId: "connect4", walletAddress: alphaWallet, name: "Alpha" },
     });
+    assert.equal(firstJoin.statusCode, 200);
+    assert.equal((firstJoin.json() as { playerId: string }).playerId, alphaWallet.toLowerCase());
     const joined = await app.inject({
       method: "POST",
       url: "/lobby/join",
@@ -117,27 +119,74 @@ test("agent state requires bearer token for the requested player wallet", async 
     assert.equal(joined.statusCode, 200);
     const body = joined.json() as { matchId: string };
     assert.ok(body.matchId);
+    const playerId = alphaWallet.toLowerCase();
 
     const missingAuth = await app.inject({
       method: "GET",
-      url: `/match/${body.matchId}/state?playerId=agent_alpha`,
+      url: `/match/${body.matchId}/state?playerId=${encodeURIComponent(playerId)}`,
     });
     assert.equal(missingAuth.statusCode, 401);
 
     const wrongWallet = await app.inject({
       method: "GET",
-      url: `/match/${body.matchId}/state?playerId=agent_alpha`,
+      url: `/match/${body.matchId}/state?playerId=${encodeURIComponent(playerId)}`,
       headers: { authorization: `Bearer ${betaToken}` },
     });
     assert.equal(wrongWallet.statusCode, 403);
 
     const ok = await app.inject({
       method: "GET",
-      url: `/match/${body.matchId}/state?playerId=agent_alpha`,
+      url: `/match/${body.matchId}/state?playerId=${encodeURIComponent(playerId)}`,
       headers: { authorization: `Bearer ${alphaToken}` },
     });
     assert.equal(ok.statusCode, 200);
-    assert.equal((ok.json() as { playerId: string }).playerId, "agent_alpha");
+    assert.equal((ok.json() as { playerId: string }).playerId, playerId);
+  } finally {
+    await app.close();
+  }
+});
+
+test("external lobby uses wallet identity regardless of local alpha or beta agent label", async () => {
+  const app = await buildServer({
+    LOCAL_DEV_ALLOW_MOCKS: "true",
+    LOCAL_DEV_PRIZE_POOL: "mock",
+    AGENT_INFERENCE_MODE: "mock",
+    ARCHIVE_MODE: "mock",
+    PAYOUT_MODE: "contract",
+  });
+  try {
+    const alphaWallet = "0x00000000000000000000000000000000000000a1";
+    const betaWallet = "0x00000000000000000000000000000000000000b2";
+    const waiting = await app.inject({
+      method: "POST",
+      url: "/lobby/join",
+      payload: { gameId: "connect4", walletAddress: betaWallet, name: "Beta" },
+    });
+    assert.equal(waiting.statusCode, 200);
+    assert.equal((waiting.json() as { status: string; playerId: string }).status, "waiting");
+    assert.equal((waiting.json() as { playerId: string }).playerId, betaWallet.toLowerCase());
+
+    const matched = await app.inject({
+      method: "POST",
+      url: "/lobby/join",
+      payload: { gameId: "connect4", walletAddress: alphaWallet, name: "Alpha" },
+    });
+    assert.equal(matched.statusCode, 200);
+    const body = matched.json() as {
+      status: string;
+      playerId: string;
+      players: Array<{ id: string; walletAddress: string; name: string }>;
+    };
+    assert.equal(body.status, "matched");
+    assert.equal(body.playerId, alphaWallet.toLowerCase());
+    assert.deepEqual(
+      body.players.map((player) => player.id),
+      [betaWallet.toLowerCase(), alphaWallet.toLowerCase()],
+    );
+    assert.deepEqual(
+      body.players.map((player) => player.name),
+      ["Beta", "Alpha"],
+    );
   } finally {
     await app.close();
   }

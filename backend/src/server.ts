@@ -14,6 +14,7 @@ import {
 import { MatchCoordinator, type RulebookCommitment } from "./core/MatchCoordinator.js";
 import type { Player } from "./core/types.js";
 import { Connect4 } from "./games/Connect4.js";
+import type { IGameEngine } from "./games/IGameEngine.js";
 import { SovereignBluff } from "./games/SovereignBluff.js";
 import { MockArchiveAdapter } from "./integrations/MockArchiveAdapter.js";
 import { ZeroGStorageAdapter } from "./integrations/ZeroGStorageAdapter.js";
@@ -74,9 +75,9 @@ class DemoMatchService implements DemoMatchFactory {
 }
 
 class ExternalLobbyService implements LobbyService {
-  private readonly waiting = new Map<string, Player>();
+  private readonly waiting = new Map<string, Player[]>();
   private readonly assignedByWallet = new Map<string, string>();
-  private sequence = 0;
+  private readonly enginesById: Map<string, IGameEngine>;
 
   constructor(
     private readonly coordinator: MatchCoordinator,
@@ -84,9 +85,17 @@ class ExternalLobbyService implements LobbyService {
       createAndFund?: (input: { matchId: string; players: Player[]; rulesHash?: string }) => Promise<unknown>;
     },
     private readonly rulebooks: Record<string, RulebookCommitment>,
-  ) {}
+    engines: IGameEngine[],
+  ) {
+    this.enginesById = new Map(engines.map((engine) => [engine.id, engine]));
+  }
 
   async join(input: { gameId: string; walletAddress: string; name?: string }) {
+    const engine = this.enginesById.get(input.gameId);
+    if (!engine) {
+      throw new Error(`Unknown game: ${input.gameId}`);
+    }
+
     const assigned = this.assignedByWallet.get(keyFor(input.gameId, input.walletAddress));
     if (assigned) {
       const match = this.coordinator.getMatch(assigned);
@@ -94,43 +103,54 @@ class ExternalLobbyService implements LobbyService {
         (candidate) => candidate.walletAddress.toLowerCase() === input.walletAddress.toLowerCase(),
       );
       if (match && player) {
-        return {
-          status: "matched" as const,
-          gameId: input.gameId,
-          matchId: match.id,
-          playerId: player.id,
-          players: match.players,
-          tokenRequired: true,
-        };
+        if (match.status !== "paid" && match.status !== "failed") {
+          return {
+            status: "matched" as const,
+            gameId: input.gameId,
+            matchId: match.id,
+            playerId: player.id,
+            players: match.players,
+            tokenRequired: true,
+          };
+        }
       }
+      this.assignedByWallet.delete(keyFor(input.gameId, input.walletAddress));
     }
 
-    const waiting = this.waiting.get(input.gameId);
-    if (!waiting) {
-      const player = this.playerFromJoin(input, "alpha");
-      this.waiting.set(input.gameId, player);
+    const queue = this.waiting.get(input.gameId) ?? [];
+    const existing = queue.find(
+      (player) => player.walletAddress.toLowerCase() === input.walletAddress.toLowerCase(),
+    );
+    if (existing) {
+      return {
+        status: "waiting" as const,
+        gameId: input.gameId,
+        playerId: existing.id,
+        players: queue,
+        tokenRequired: true,
+        message: waitingMessage(engine, queue.length),
+      };
+    }
+
+    const player = this.playerFromJoin(input);
+    queue.push(player);
+    this.waiting.set(input.gameId, queue);
+
+    if (queue.length < engine.maxPlayers) {
       return {
         status: "waiting" as const,
         gameId: input.gameId,
         playerId: player.id,
+        players: queue,
         tokenRequired: true,
-        message: "Waiting for a second external agent to join this game.",
+        message: waitingMessage(engine, queue.length),
       };
     }
 
-    if (waiting.walletAddress.toLowerCase() === input.walletAddress.toLowerCase()) {
-      return {
-        status: "waiting" as const,
-        gameId: input.gameId,
-        playerId: waiting.id,
-        tokenRequired: true,
-        message: "Waiting for a second external agent to join this game.",
-      };
+    const players = queue.splice(0, engine.maxPlayers);
+    if (queue.length === 0) {
+      this.waiting.delete(input.gameId);
     }
-
-    const challenger = this.playerFromJoin(input, "beta");
-    const players = [waiting, challenger];
-    this.waiting.delete(input.gameId);
     const match = this.coordinator.createMatch(input.gameId, players);
     const rulesHash = this.rulebooks[input.gameId]?.rulesHash;
     if (!rulesHash) {
@@ -160,20 +180,16 @@ class ExternalLobbyService implements LobbyService {
       status: "matched" as const,
       gameId: input.gameId,
       matchId: match.id,
-      playerId: challenger.id,
+      playerId: player.id,
       players,
       tokenRequired: true,
     };
   }
 
-  private playerFromJoin(
-    input: { walletAddress: string; name?: string },
-    side: "alpha" | "beta",
-  ): Player {
-    this.sequence += 1;
+  private playerFromJoin(input: { walletAddress: string; name?: string }): Player {
     return {
-      id: `agent_${side}`,
-      name: input.name ?? (side === "alpha" ? "Alpha" : "Beta"),
+      id: playerIdForWallet(input.walletAddress),
+      name: input.name ?? shortWallet(input.walletAddress),
       walletAddress: input.walletAddress,
       agentKind: "mock",
     };
@@ -277,13 +293,13 @@ export async function buildServer(env: NodeJS.ProcessEnv = process.env) {
 
   const players: Player[] = [
     {
-      id: "agent_alpha",
+      id: playerIdForWallet(env.AGENT_ALPHA_WALLET_ADDRESS ?? "0x00000000000000000000000000000000000000a1"),
       name: "Alpha",
       walletAddress: env.AGENT_ALPHA_WALLET_ADDRESS ?? "0x00000000000000000000000000000000000000a1",
       agentKind: env.AGENT_INFERENCE_MODE === "0g-serving" ? "0g-serving" : "mock",
     },
     {
-      id: "agent_beta",
+      id: playerIdForWallet(env.AGENT_BETA_WALLET_ADDRESS ?? "0x00000000000000000000000000000000000000b2"),
       name: "Beta",
       walletAddress: env.AGENT_BETA_WALLET_ADDRESS ?? "0x00000000000000000000000000000000000000b2",
       agentKind: env.AGENT_INFERENCE_MODE === "0g-serving" ? "0g-serving" : "mock",
@@ -297,7 +313,7 @@ export async function buildServer(env: NodeJS.ProcessEnv = process.env) {
   await registerRoutes(app, {
     coordinator,
     engines,
-    lobby: new ExternalLobbyService(coordinator, prizePool, rulebooks),
+    lobby: new ExternalLobbyService(coordinator, prizePool, rulebooks, engines),
     auth: new WalletAuthService(localDevAllowMocks),
     demoMatchFactory: new DemoMatchService(coordinator, prizePool, players, rulebooks),
   });
@@ -399,6 +415,21 @@ export function validateStartup(env: NodeJS.ProcessEnv): void {
 
 function keyFor(gameId: string, walletAddress: string): string {
   return `${gameId}:${walletAddress.toLowerCase()}`;
+}
+
+function playerIdForWallet(walletAddress: string): string {
+  return walletAddress.toLowerCase();
+}
+
+function shortWallet(walletAddress: string): string {
+  return `${walletAddress.slice(0, 6)}...${walletAddress.slice(-4)}`;
+}
+
+function waitingMessage(engine: IGameEngine, waitingCount: number): string {
+  const remaining = Math.max(0, engine.maxPlayers - waitingCount);
+  return remaining === 1
+    ? "Waiting for one more external player to join this game."
+    : `Waiting for ${remaining} more external players to join this game.`;
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1])) {

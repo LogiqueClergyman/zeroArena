@@ -37,16 +37,25 @@ const runner = new AgentRunner(client, new LlmJsonStrategy({
   walletAddress,
   privateKeyRef,
   userPrompt: loadAgentPrompt([
-    "You are playing Connect4 as a competitive demo agent.",
-    "Choose exactly one legal move from publicState.validColumns and return only {\"column\": number}.",
-    "Move priority:",
-    "1. If you can win immediately, play the winning column.",
-    "2. If the opponent can win immediately next turn, block that column.",
-    "3. Prefer moves that create a threat of four while avoiding moves that let the opponent win immediately.",
-    "4. Prefer center columns in this order when no tactic is available: 3, 2, 4, 1, 5, 0, 6.",
-    "5. Never choose a full column or a column not listed in validColumns.",
-    "Do not explain the move. Do not include markdown or extra keys.",
+    "Play Connect4 to win, not to fill the board.",
+    "Return exactly one JSON object: {\"column\": number}.",
+    "Choose only from publicState.validColumns.",
+    "Board context:",
+    "- Row 0 is the top of the board; row 5 is the bottom.",
+    "- A move falls to the landingRow for its column.",
+    "- DERIVED_STATE_CONTEXT_JSON.columnProfiles gives neutral column height and stack context only.",
+    "Required reasoning:",
+    "- Inspect the current board before choosing.",
+    "- Look for immediate wins.",
+    "- Look for immediate opponent threats that must be blocked.",
+    "- Otherwise choose a move that improves your position.",
+    "Constraints:",
+    "- Do not make decorative patterns.",
+    "- Do not fill columns for symmetry.",
+    "- Do not choose a full column.",
+    "- Do not explain the move.",
   ].join("\n")),
+  extraContext: ({ publicState, playerId }) => connect4Context(publicState, playerId),
   fallback: new Connect4BasicStrategy(),
 }), {
   gameId: process.env.ZEROARENA_GAME_ID ?? "connect4",
@@ -82,4 +91,41 @@ function arg(name) {
 
 function agentArg() {
   return arg("--agent") ?? "alpha";
+}
+
+function connect4Context(publicState, playerId) {
+  const state = asRecord(publicState);
+  const board = Array.isArray(state.board) ? state.board : [];
+  const rows = typeof state.rows === "number" ? state.rows : board.length;
+  const columns = typeof state.columns === "number" ? state.columns : board[0]?.length ?? 0;
+  const validColumns = Array.isArray(state.validColumns) ? state.validColumns : [];
+  const players = Array.isArray(state.players) ? state.players : [];
+  const opponent = players.find((candidate) => candidate !== playerId);
+  const profiles = Array.from({ length: columns }, (_, column) => {
+    const cellsTopToBottom = board.map((row) => Array.isArray(row) ? row[column] ?? null : null);
+    const occupied = cellsTopToBottom.filter((cell) => cell !== null).length;
+    const landingRow = validColumns.includes(column) ? rows - occupied - 1 : null;
+    return {
+      column,
+      valid: validColumns.includes(column),
+      height: occupied,
+      emptySlots: rows - occupied,
+      landingRow,
+      cellsTopToBottom,
+      stackBottomToTop: [...cellsTopToBottom].reverse().filter((cell) => cell !== null),
+    };
+  });
+  return {
+    boardOrientation: "rows are top-to-bottom; row 0 is top; highest row index is bottom",
+    myPlayerId: playerId,
+    opponentPlayerId: opponent,
+    rows,
+    columns,
+    validColumns,
+    columnProfiles: profiles,
+  };
+}
+
+function asRecord(value) {
+  return typeof value === "object" && value !== null && !Array.isArray(value) ? value : {};
 }
