@@ -1,0 +1,23 @@
+{
+  "name": "@zeroarena/agent-sdk",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "npm run build && node --test \"dist/**/*.test.js\""
+  },
+  "dependencies": {
+    "@0gfoundation/0g-compute-ts-sdk": "^0.8.4",
+    "ajv": "^8.20.0",
+    "dotenv": "^16.4.7",
+    "ethers": "^6.13.1",
+    "zeroarena": "file:../.."
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "typescript": "^5.4.5"
+  }
+}

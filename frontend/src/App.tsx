@@ -6,7 +6,6 @@ import {
   getHealth,
   getLiveMatches,
   getMatchUi,
-  startDemoAgents,
   type AgentLog,
   type FundingTxReceipt,
   type GameDetail,
@@ -920,9 +919,6 @@ function GameDetailPage({ gameId, navigate }: { gameId: string; navigate: (to: s
     setStarting(true);
     try {
       const match = await createDemoMatch(gameId);
-      void startDemoAgents(match.matchId).catch((err) =>
-        setError(`Demo agent runner failed: ${errorMessage(err)}`),
-      );
       // Open the live game in a new tab (full-screen, no sidebar)
       window.open(`/game/${match.matchId}`, "_blank");
       await refresh();
@@ -967,7 +963,7 @@ function GameDetailPage({ gameId, navigate }: { gameId: string; navigate: (to: s
               </div>
               <div className="detail-cta">
                 <button className="btn btn-primary" onClick={startDemo} disabled={starting}>
-                  {starting ? "Creating…" : "Start a demo table"} →
+                  {starting ? "Creating…" : "Create referee table"} →
                 </button>
                 <button className="btn btn-ghost" onClick={() => navigate("/docs")}>
                   View rulebook

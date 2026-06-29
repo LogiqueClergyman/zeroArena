@@ -121,6 +121,7 @@ export class MatchCoordinator {
       state,
       createdAt: now,
       updatedAt: now,
+      timeoutCounts: Object.fromEntries(players.map((player) => [player.id, 0])),
     };
 
     this.inference.set(
@@ -173,6 +174,8 @@ export class MatchCoordinator {
 
     match.status = "active";
     match.state.status = "active";
+    match.turnStartedAt = this.now().toISOString();
+    match.timeoutCounts = this.ensureTimeoutCounts(match);
     return this.store.update(match);
   }
 
@@ -193,8 +196,51 @@ export class MatchCoordinator {
       actionSchema: engine.actionSchema,
       round: match.state.round,
       timeoutInMs: this.timeoutInMs,
+      turnStartedAt: match.turnStartedAt,
+      turnExpiresAt: match.turnStartedAt
+        ? new Date(Date.parse(match.turnStartedAt) + this.timeoutInMs).toISOString()
+        : undefined,
+      timeoutsUsed: match.timeoutCounts?.[playerId] ?? 0,
       receipt: match.receipt,
     };
+  }
+
+  async processTimeouts(matchId: string): Promise<Match> {
+    const match = this.requireMatch(matchId);
+    if (match.status !== "active") {
+      return match;
+    }
+
+    const startedAt = match.turnStartedAt ? Date.parse(match.turnStartedAt) : Number.NaN;
+    if (!Number.isFinite(startedAt)) {
+      match.turnStartedAt = this.now().toISOString();
+      return this.store.update(match);
+    }
+    if (this.now().getTime() - startedAt < this.timeoutInMs) {
+      return match;
+    }
+
+    const timedOutPlayer = match.players.find((player) => this.isPlayerTurn(match, player.id))?.id;
+    if (!timedOutPlayer) {
+      match.turnStartedAt = this.now().toISOString();
+      return this.store.update(match);
+    }
+
+    match.timeoutCounts = this.ensureTimeoutCounts(match);
+    if ((match.timeoutCounts[timedOutPlayer] ?? 0) >= 1) {
+      return this.applyTimeoutForfeit(match, timedOutPlayer);
+    }
+    return this.applyTimeoutDefaultMove(match, timedOutPlayer);
+  }
+
+  async processLiveTimeouts(): Promise<void> {
+    const activeIds = this.store
+      .list()
+      .filter((match) => match.status === "active")
+      .map((match) => match.id);
+    for (const matchId of activeIds) {
+      await this.processTimeouts(matchId);
+    }
   }
 
   async submitMove(
@@ -253,6 +299,7 @@ export class MatchCoordinator {
       return { ok: true, match: this.requireMatch(match.id), receipt };
     }
 
+    match.turnStartedAt = this.now().toISOString();
     this.store.update(match);
     return { ok: true, match };
   }
@@ -482,6 +529,90 @@ export class MatchCoordinator {
       throw new Error(`Unknown player: ${playerId}`);
     }
     return player;
+  }
+
+  private async applyTimeoutDefaultMove(match: Match, playerId: PlayerId): Promise<Match> {
+    const engine = this.requireEngine(match.gameId);
+    if (!engine.getDefaultMove) {
+      return this.applyTimeoutForfeit(match, playerId);
+    }
+    const action = engine.getDefaultMove(match.state, playerId);
+    const validation = engine.validateMove(match.state, action, playerId);
+    if (!validation.ok) {
+      throw new Error(`Timeout default move is invalid: ${validation.error ?? "Invalid move"}`);
+    }
+
+    match.timeoutCounts = this.ensureTimeoutCounts(match);
+    match.timeoutCounts[playerId] = (match.timeoutCounts[playerId] ?? 0) + 1;
+
+    const publicStateBefore = engine.getPublicState(match.state, playerId);
+    const nextState = engine.applyMove(match.state, action, playerId);
+    const publicStateAfter = engine.getPublicState(nextState, playerId);
+    const turn: TurnRecord = {
+      matchId: match.id,
+      round: match.state.round,
+      phase: "timeout-default",
+      playerId,
+      action,
+      publicStateBefore,
+      publicStateAfter,
+      timestamp: this.now().toISOString(),
+    };
+
+    match.state = nextState;
+    this.store.appendTurn(match.id, turn);
+    const termination = engine.checkTermination(match.state);
+    if (termination.finished) {
+      match.status = "finished";
+      match.state.status = "finished";
+      match.state.winner = termination.winner;
+      if (termination.outcome === "draw") {
+        match.state.publicContext = "draw";
+      }
+      this.store.update(match);
+      await this.finalizeMatch(match.id);
+      return this.requireMatch(match.id);
+    }
+
+    match.turnStartedAt = this.now().toISOString();
+    return this.store.update(match);
+  }
+
+  private async applyTimeoutForfeit(match: Match, timedOutPlayer: PlayerId): Promise<Match> {
+    const engine = this.requireEngine(match.gameId);
+    if (!engine.applyForfeit) {
+      throw new Error(`Game ${match.gameId} does not support timeout forfeit`);
+    }
+
+    const publicStateBefore = engine.getPublicState(match.state, timedOutPlayer);
+    const nextState = engine.applyForfeit(match.state, timedOutPlayer);
+    const publicStateAfter = engine.getPublicState(nextState, timedOutPlayer);
+    match.timeoutCounts = this.ensureTimeoutCounts(match);
+    match.timeoutCounts[timedOutPlayer] = (match.timeoutCounts[timedOutPlayer] ?? 0) + 1;
+    match.state = nextState;
+    match.status = "finished";
+    match.state.status = "finished";
+
+    this.store.appendTurn(match.id, {
+      matchId: match.id,
+      round: match.state.round,
+      phase: "timeout-forfeit",
+      playerId: timedOutPlayer,
+      action: { reason: "timeout-forfeit" },
+      publicStateBefore,
+      publicStateAfter,
+      timestamp: this.now().toISOString(),
+    });
+
+    this.store.update(match);
+    await this.finalizeMatch(match.id);
+    return this.requireMatch(match.id);
+  }
+
+  private ensureTimeoutCounts(match: Match): Record<PlayerId, number> {
+    return Object.fromEntries(
+      match.players.map((player) => [player.id, match.timeoutCounts?.[player.id] ?? 0]),
+    );
   }
 
   private isPlayerTurn(match: Match, playerId: PlayerId): boolean {

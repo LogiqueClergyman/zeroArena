@@ -1,0 +1,12 @@
+{
+  "name": "zeroarena-connect4-basic-agent",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "npm run build --prefix ../.. && node start.js"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.7"
+  }
+}

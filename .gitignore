@@ -8,8 +8,17 @@ frontend/.env
 frontend/.env.local
 .agents
 .codex
+node_modules
+**/node_modules
+dist
+**/dist
+.tmp/
+.tmp-e2e-*/
 DEMO.md
 SESSION_E_HANDOFF.md
 SESSION_PROMPTS.md
 spec.md
 README.md
+assets
+PITCH.md
+.claude

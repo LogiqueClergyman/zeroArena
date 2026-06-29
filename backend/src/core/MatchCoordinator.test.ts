@@ -307,3 +307,62 @@ test("coordinator finalizes Connect4 draws through refund path", async () => {
   assert.equal(receipt?.refundTxHashes?.length, 2);
   assert.equal(receipt?.payoutTxHash, undefined);
 });
+
+test("coordinator applies one Connect4 timeout default before second-timeout forfeit", async () => {
+  let now = new Date("2026-06-24T00:00:00.000Z");
+  const subject = new MatchCoordinator({
+    engines: [new Connect4()],
+    archive: {
+      mode: "mock",
+      async archiveMatch() {
+        return { archiveHash: "mock-0g-connect4-timeout", url: "mock://connect4-timeout" };
+      },
+    },
+    prizePool: {
+      mode: "contract",
+      async getPool() {
+        return poolStatus({ paid: true, rulesHash: "0x2222222222222222222222222222222222222222222222222222222222222222" });
+      },
+      async payoutWinner() {
+        return { txHash: "0xpayoutbeta", amountWei: "2000", status: "paid" };
+      },
+      async refundDraw() {
+        throw new Error("timeout forfeit must not refund draw");
+      },
+    },
+    rulebook: {
+      rulesHash: "0x2222222222222222222222222222222222222222222222222222222222222222",
+      rulesUrl: "mock://rulebook/connect4.v1.json",
+      rulesVersion: "1.0.0",
+    },
+    idFactory: () => "match_test",
+    timeoutInMs: 1000,
+    now: () => now,
+  });
+  subject.createMatch("connect4", players);
+  await subject.activateMatch("match_test");
+
+  now = new Date("2026-06-24T00:00:01.001Z");
+  const afterFirstTimeout = await subject.processTimeouts("match_test");
+  const firstBoard = afterFirstTimeout.state.board as Connect4Board;
+
+  assert.equal(afterFirstTimeout.status, "active");
+  assert.equal(afterFirstTimeout.timeoutCounts?.alpha, 1);
+  assert.equal(firstBoard.moves.length, 1);
+  assert.equal(firstBoard.moves[0].playerId, "alpha");
+  assert.equal(firstBoard.moves[0].column, 3);
+  assert.equal(firstBoard.currentPlayer, "beta");
+
+  await subject.submitMove("match_test", "beta", { column: 2 });
+
+  now = new Date("2026-06-24T00:00:02.002Z");
+  const final = await subject.processTimeouts("match_test");
+  const receipt = subject.getReceipt("match_test");
+
+  assert.equal(final.status, "paid");
+  assert.equal(final.state.winner, "beta");
+  assert.equal(final.timeoutCounts?.alpha, 2);
+  assert.equal(receipt?.outcome, "winner");
+  assert.equal(receipt?.winner, "beta");
+  assert.equal(receipt?.payoutTxHash, "0xpayoutbeta");
+});

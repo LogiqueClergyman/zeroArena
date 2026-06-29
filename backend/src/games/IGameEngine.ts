@@ -25,6 +25,8 @@ export interface IGameEngine {
     player: PlayerId,
   ): ValidationResult;
   applyMove(state: GameState, move: unknown, player: PlayerId): GameState;
+  getDefaultMove?(state: GameState, player: PlayerId): unknown;
+  applyForfeit?(state: GameState, timedOutPlayer: PlayerId): GameState;
   checkTermination(state: GameState): TerminationResult;
   renderForUI(state: GameState): UIRenderPayload;
 }

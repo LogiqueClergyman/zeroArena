@@ -97,6 +97,8 @@ export interface Match {
   state: GameState;
   createdAt: string;
   updatedAt: string;
+  turnStartedAt?: string;
+  timeoutCounts?: Record<PlayerId, number>;
   receipt?: MatchReceipt;
   failureReason?: string;
 }
@@ -111,6 +113,9 @@ export interface AgentStateResponse {
   actionSchema: unknown;
   round: number;
   timeoutInMs: number;
+  turnStartedAt?: string;
+  turnExpiresAt?: string;
+  timeoutsUsed: number;
   receipt?: MatchReceipt;
 }
 

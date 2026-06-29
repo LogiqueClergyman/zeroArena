@@ -293,6 +293,35 @@ export class SovereignBluff implements IGameEngine {
     return this.applyMove(state, { phase: "bid", amount: 0 }, player);
   }
 
+  getDefaultMove(state: GameState, player: PlayerId): unknown {
+    const board = boardOf(state);
+    if (board.phase === "broadcast") {
+      return { phase: "broadcast", message: "" };
+    }
+    if (board.phase === "bid") {
+      return { phase: "bid", amount: 0 };
+    }
+    throw new Error(`No Sovereign Bluff timeout move is available during ${board.phase}`);
+  }
+
+  applyForfeit(state: GameState, timedOutPlayer: PlayerId): GameState {
+    if (!state.players.includes(timedOutPlayer)) {
+      throw new Error("Unknown player");
+    }
+    const winner = state.players.find((id) => id !== timedOutPlayer);
+    if (!winner) {
+      throw new Error("Missing opponent for timeout forfeit");
+    }
+    const next = cloneState(state);
+    const board = boardOf(next);
+    board.phase = "finished";
+    board.forfeitWinner = winner;
+    next.status = "finished";
+    next.winner = winner;
+    next.publicContext = { reason: "timeout-forfeit", timedOutPlayer };
+    return next;
+  }
+
   recordAgentFailure(state: GameState, player: PlayerId): GameState {
     if (!state.players.includes(player)) {
       throw new Error("Unknown player");

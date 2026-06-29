@@ -85,7 +85,7 @@ export class ContractPrizePoolAdapter implements PrizePoolAdapter {
         matchId: input.matchId,
         playerId: player.id,
         walletAddress: player.walletAddress,
-        privateKeyRef: privateKeyRefForPlayer(player.id),
+        privateKeyRef: privateKeyRefForWallet(player.walletAddress, this.options.privateKeysByRef),
         amountWei: this.options.stakeWei,
       });
     }
@@ -252,12 +252,19 @@ export function archiveHashToBytes32(hash: string): string {
   return ethers.keccak256(ethers.toUtf8Bytes(hash));
 }
 
-function privateKeyRefForPlayer(playerId: string): string {
-  if (playerId === "agent_alpha") {
-    return "AGENT_ALPHA_PRIVATE_KEY";
+export function privateKeyRefForWallet(
+  walletAddress: string,
+  privateKeysByRef: Record<string, string | undefined>,
+): string {
+  const expected = ethers.getAddress(walletAddress);
+  for (const [ref, privateKey] of Object.entries(privateKeysByRef)) {
+    if (!privateKey) {
+      continue;
+    }
+    const signer = new ethers.Wallet(privateKey);
+    if (ethers.getAddress(signer.address) === expected) {
+      return ref;
+    }
   }
-  if (playerId === "agent_beta") {
-    return "AGENT_BETA_PRIVATE_KEY";
-  }
-  return `${playerId.toUpperCase()}_PRIVATE_KEY`;
+  throw new Error(`No configured private key matches ${walletAddress}`);
 }

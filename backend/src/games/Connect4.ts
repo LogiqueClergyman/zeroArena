@@ -169,6 +169,35 @@ export class Connect4 implements IGameEngine {
     return next;
   }
 
+  getDefaultMove(state: GameState, player: PlayerId): unknown {
+    const board = boardOf(state);
+    const preferredColumns = [3, 2, 4, 1, 5, 0, 6];
+    const valid = new Set(validColumns(board));
+    const column = preferredColumns.find((candidate) => valid.has(candidate)) ?? validColumns(board)[0];
+    if (column === undefined) {
+      throw new Error("No valid Connect4 timeout move is available");
+    }
+    return { column };
+  }
+
+  applyForfeit(state: GameState, timedOutPlayer: PlayerId): GameState {
+    if (!state.players.includes(timedOutPlayer)) {
+      throw new Error("Unknown player");
+    }
+    const winner = state.players.find((player) => player !== timedOutPlayer);
+    if (!winner) {
+      throw new Error("Missing opponent for timeout forfeit");
+    }
+    const next = cloneState(state);
+    const board = boardOf(next);
+    board.outcome = "winner";
+    board.winningCells = [];
+    next.status = "finished";
+    next.winner = winner;
+    next.publicContext = { reason: "timeout-forfeit", timedOutPlayer };
+    return next;
+  }
+
   checkTermination(state: GameState) {
     const board = boardOf(state);
     if (board.outcome === "winner") {

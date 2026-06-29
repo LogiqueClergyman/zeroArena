@@ -1,14 +1,16 @@
 import Fastify from "fastify";
 import cors from "@fastify/cors";
 import { config as loadEnv } from "dotenv";
+import { randomBytes, randomUUID } from "node:crypto";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { AgentRunner } from "./agents/AgentRunner.js";
-import { createConnect4Agent } from "./agents/connect4Agents.js";
-import { createAggressiveAgent, createCautiousAgent } from "./agents/demoAgents.js";
-import { MockProvider } from "./agents/providers/MockProvider.js";
-import { ZeroGServingProvider } from "./agents/providers/ZeroGServingProvider.js";
-import { registerRoutes, type DemoMatchFactory } from "./api/routes.js";
+import { verifyMessage } from "ethers";
+import {
+  registerRoutes,
+  type AuthService,
+  type DemoMatchFactory,
+  type LobbyService,
+} from "./api/routes.js";
 import { MatchCoordinator, type RulebookCommitment } from "./core/MatchCoordinator.js";
 import type { Player } from "./core/types.js";
 import { Connect4 } from "./games/Connect4.js";
@@ -16,13 +18,17 @@ import { SovereignBluff } from "./games/SovereignBluff.js";
 import { MockArchiveAdapter } from "./integrations/MockArchiveAdapter.js";
 import { ZeroGStorageAdapter } from "./integrations/ZeroGStorageAdapter.js";
 import { ContractPrizePoolAdapter } from "./integrations/ContractPrizePoolAdapter.js";
+import { LocalDevPrizePoolAdapter, localDevRulesHash } from "./integrations/LocalDevPrizePoolAdapter.js";
+import type { PrizePoolAdapter } from "./integrations/PrizePoolAdapter.js";
 
 loadEnv({ path: resolve(process.cwd(), ".env") });
 
 class DemoMatchService implements DemoMatchFactory {
   constructor(
     private readonly coordinator: MatchCoordinator,
-    private readonly prizePool: ContractPrizePoolAdapter,
+    private readonly prizePool: PrizePoolAdapter & {
+      createAndFund?: (input: { matchId: string; players: Player[]; rulesHash?: string }) => Promise<unknown>;
+    },
     private readonly players: Player[],
     private readonly rulebooks: Record<string, RulebookCommitment>,
   ) {}
@@ -37,11 +43,20 @@ class DemoMatchService implements DemoMatchFactory {
     }
     const match = this.coordinator.createMatch(gameId, this.players);
     try {
-      await this.prizePool.createAndFund({
-        matchId: match.id,
-        players: this.players,
-        rulesHash,
-      });
+      if (this.prizePool.createAndFund) {
+        await this.prizePool.createAndFund({
+          matchId: match.id,
+          players: this.players,
+          rulesHash,
+        });
+      } else {
+        await this.prizePool.createPool({
+          matchId: match.id,
+          players: this.players,
+          stakeWei: process.env.MATCH_STAKE_WEI ?? "1000",
+          rulesHash,
+        });
+      }
       await this.coordinator.activateMatch(match.id);
       return {
         matchId: match.id,
@@ -58,23 +73,192 @@ class DemoMatchService implements DemoMatchFactory {
   }
 }
 
+class ExternalLobbyService implements LobbyService {
+  private readonly waiting = new Map<string, Player>();
+  private readonly assignedByWallet = new Map<string, string>();
+  private sequence = 0;
+
+  constructor(
+    private readonly coordinator: MatchCoordinator,
+    private readonly prizePool: PrizePoolAdapter & {
+      createAndFund?: (input: { matchId: string; players: Player[]; rulesHash?: string }) => Promise<unknown>;
+    },
+    private readonly rulebooks: Record<string, RulebookCommitment>,
+  ) {}
+
+  async join(input: { gameId: string; walletAddress: string; name?: string }) {
+    const assigned = this.assignedByWallet.get(keyFor(input.gameId, input.walletAddress));
+    if (assigned) {
+      const match = this.coordinator.getMatch(assigned);
+      const player = match?.players.find(
+        (candidate) => candidate.walletAddress.toLowerCase() === input.walletAddress.toLowerCase(),
+      );
+      if (match && player) {
+        return {
+          status: "matched" as const,
+          gameId: input.gameId,
+          matchId: match.id,
+          playerId: player.id,
+          players: match.players,
+          tokenRequired: true,
+        };
+      }
+    }
+
+    const waiting = this.waiting.get(input.gameId);
+    if (!waiting) {
+      const player = this.playerFromJoin(input, "alpha");
+      this.waiting.set(input.gameId, player);
+      return {
+        status: "waiting" as const,
+        gameId: input.gameId,
+        playerId: player.id,
+        tokenRequired: true,
+        message: "Waiting for a second external agent to join this game.",
+      };
+    }
+
+    if (waiting.walletAddress.toLowerCase() === input.walletAddress.toLowerCase()) {
+      return {
+        status: "waiting" as const,
+        gameId: input.gameId,
+        playerId: waiting.id,
+        tokenRequired: true,
+        message: "Waiting for a second external agent to join this game.",
+      };
+    }
+
+    const challenger = this.playerFromJoin(input, "beta");
+    const players = [waiting, challenger];
+    this.waiting.delete(input.gameId);
+    const match = this.coordinator.createMatch(input.gameId, players);
+    const rulesHash = this.rulebooks[input.gameId]?.rulesHash;
+    if (!rulesHash) {
+      this.coordinator.failMatch(match.id, `Missing rulebook hash for ${input.gameId}`);
+      throw new Error(`Missing rulebook hash for ${input.gameId}`);
+    }
+    try {
+      if (this.prizePool.createAndFund) {
+        await this.prizePool.createAndFund({ matchId: match.id, players, rulesHash });
+      } else {
+        await this.prizePool.createPool({
+          matchId: match.id,
+          players,
+          stakeWei: process.env.MATCH_STAKE_WEI ?? "1000",
+          rulesHash,
+        });
+      }
+      await this.coordinator.activateMatch(match.id);
+    } catch (error) {
+      this.coordinator.failMatch(match.id, errorMessage(error));
+      throw error;
+    }
+    for (const player of players) {
+      this.assignedByWallet.set(keyFor(input.gameId, player.walletAddress), match.id);
+    }
+    return {
+      status: "matched" as const,
+      gameId: input.gameId,
+      matchId: match.id,
+      playerId: challenger.id,
+      players,
+      tokenRequired: true,
+    };
+  }
+
+  private playerFromJoin(
+    input: { walletAddress: string; name?: string },
+    side: "alpha" | "beta",
+  ): Player {
+    this.sequence += 1;
+    return {
+      id: `agent_${side}`,
+      name: input.name ?? (side === "alpha" ? "Alpha" : "Beta"),
+      walletAddress: input.walletAddress,
+      agentKind: "mock",
+    };
+  }
+}
+
+class WalletAuthService implements AuthService {
+  readonly required = true;
+  private readonly challenges = new Map<string, { nonce: string; message: string; expiresAt: number }>();
+  private readonly tokens = new Map<string, { walletAddress: string; expiresAt: number }>();
+
+  constructor(private readonly allowLocalDevSignature: boolean) {}
+
+  createChallenge(walletAddress: string): { walletAddress: string; nonce: string; message: string } {
+    const nonce = randomBytes(16).toString("hex");
+    const message = [
+      "ZeroArena agent authentication",
+      `wallet=${walletAddress}`,
+      `nonce=${nonce}`,
+      "Sign this message to receive a short-lived bearer token. Do not send private keys.",
+    ].join("\n");
+    this.challenges.set(walletAddress.toLowerCase(), {
+      nonce,
+      message,
+      expiresAt: Date.now() + 5 * 60_000,
+    });
+    return { walletAddress, nonce, message };
+  }
+
+  async verify(input: { walletAddress: string; signature: string }) {
+    const challenge = this.challenges.get(input.walletAddress.toLowerCase());
+    if (!challenge || challenge.expiresAt < Date.now()) {
+      throw new Error("Auth challenge is missing or expired");
+    }
+    if (input.signature !== "local-dev") {
+      const recovered = verifyMessage(challenge.message, input.signature);
+      if (recovered.toLowerCase() !== input.walletAddress.toLowerCase()) {
+        throw new Error("Signature does not match wallet address");
+      }
+    } else if (!this.allowLocalDevSignature) {
+      throw new Error("local-dev auth signature is only allowed when LOCAL_DEV_ALLOW_MOCKS=true");
+    }
+    const token = randomUUID();
+    const expiresAt = new Date(Date.now() + 60 * 60_000).toISOString();
+    this.tokens.set(token, {
+      walletAddress: input.walletAddress,
+      expiresAt: Date.parse(expiresAt),
+    });
+    this.challenges.delete(input.walletAddress.toLowerCase());
+    return { token, walletAddress: input.walletAddress, expiresAt };
+  }
+
+  walletForToken(token: string): string | undefined {
+    const record = this.tokens.get(token);
+    if (!record || record.expiresAt < Date.now()) {
+      if (record) {
+        this.tokens.delete(token);
+      }
+      return undefined;
+    }
+    return record.walletAddress;
+  }
+}
+
 export async function buildServer(env: NodeJS.ProcessEnv = process.env) {
   validateStartup(env);
   const localDevAllowMocks = env.LOCAL_DEV_ALLOW_MOCKS === "true";
   const engines = [new SovereignBluff(), new Connect4()];
   const rulebooks = rulebooksFromEnv(env);
-  const prizePool = new ContractPrizePoolAdapter({
-    rpcUrl: env.EVM_RPC_URL ?? "",
-    ownerPrivateKey: env.EVM_PRIVATE_KEY ?? "",
-    prizePoolAddress: env.PRIZE_POOL_ADDRESS ?? "",
-    stakeWei: env.MATCH_STAKE_WEI ?? "",
-    rulesHash: env.SOVEREIGN_BLUFF_RULEBOOK_HASH ?? env.CONNECT4_RULEBOOK_HASH ?? "",
-    expectedChainId: BigInt(env.EVM_CHAIN_ID ?? "16602"),
-    privateKeysByRef: {
-      AGENT_ALPHA_PRIVATE_KEY: env.AGENT_ALPHA_PRIVATE_KEY,
-      AGENT_BETA_PRIVATE_KEY: env.AGENT_BETA_PRIVATE_KEY,
-    },
-  });
+  const prizePool = localDevAllowMocks && env.LOCAL_DEV_PRIZE_POOL === "mock"
+    ? new LocalDevPrizePoolAdapter({
+        stakeWei: env.MATCH_STAKE_WEI,
+      })
+    : new ContractPrizePoolAdapter({
+        rpcUrl: env.EVM_RPC_URL ?? "",
+        ownerPrivateKey: env.EVM_PRIVATE_KEY ?? "",
+        prizePoolAddress: env.PRIZE_POOL_ADDRESS ?? "",
+        stakeWei: env.MATCH_STAKE_WEI ?? "",
+        rulesHash: env.SOVEREIGN_BLUFF_RULEBOOK_HASH ?? env.CONNECT4_RULEBOOK_HASH ?? "",
+        expectedChainId: BigInt(env.EVM_CHAIN_ID ?? "16602"),
+        privateKeysByRef: {
+          AGENT_ALPHA_PRIVATE_KEY: env.AGENT_ALPHA_PRIVATE_KEY,
+          AGENT_BETA_PRIVATE_KEY: env.AGENT_BETA_PRIVATE_KEY,
+        },
+      });
   const archive =
     env.ARCHIVE_MODE === "0g"
       ? new ZeroGStorageAdapter({
@@ -90,22 +274,6 @@ export async function buildServer(env: NodeJS.ProcessEnv = process.env) {
     prizePool,
     rulebook: rulebooks,
   });
-  const provider =
-    env.AGENT_INFERENCE_MODE === "0g-serving"
-      ? new ZeroGServingProvider({
-          rpcUrl: env.ZERO_G_EVM_RPC_URL ?? env.EVM_RPC_URL ?? "https://evmrpc-testnet.0g.ai",
-          providerAddress: env.ZERO_G_PROVIDER_ADDRESS,
-          model: env.ZERO_G_SERVING_MODEL,
-          autoFundBufferMultiplier: Number(env.ZERO_G_AUTO_FUND_BUFFER_MULTIPLIER ?? 1),
-          requestSpacingMs: Number(env.ZERO_G_INFERENCE_REQUEST_SPACING_MS ?? 7000),
-          temperature: Number(env.ZERO_G_INFERENCE_TEMPERATURE ?? 0.85),
-          topP: Number(env.ZERO_G_INFERENCE_TOP_P ?? 0.9),
-          privateKeysByRef: {
-            AGENT_ALPHA_PRIVATE_KEY: env.AGENT_ALPHA_PRIVATE_KEY ?? "",
-            AGENT_BETA_PRIVATE_KEY: env.AGENT_BETA_PRIVATE_KEY ?? "",
-          },
-        })
-      : new MockProvider();
 
   const players: Player[] = [
     {
@@ -121,45 +289,6 @@ export async function buildServer(env: NodeJS.ProcessEnv = process.env) {
       agentKind: env.AGENT_INFERENCE_MODE === "0g-serving" ? "0g-serving" : "mock",
     },
   ];
-
-  const runner = new AgentRunner(coordinator, []);
-  const agents = [
-    createCautiousAgent({
-      playerId: players[0].id,
-      walletAddress: players[0].walletAddress,
-      privateKeyRef: "AGENT_ALPHA_PRIVATE_KEY",
-      provider,
-      allowMockFallback: localDevAllowMocks,
-      validatorForSchema: (schema) => runner.validatorForSchema(schema),
-    }),
-    createAggressiveAgent({
-      playerId: players[1].id,
-      walletAddress: players[1].walletAddress,
-      privateKeyRef: "AGENT_BETA_PRIVATE_KEY",
-      provider,
-      allowMockFallback: localDevAllowMocks,
-      validatorForSchema: (schema) => runner.validatorForSchema(schema),
-    }),
-    createConnect4Agent({
-      playerId: players[0].id,
-      name: "Vesper",
-      walletAddress: players[0].walletAddress,
-      privateKeyRef: "AGENT_ALPHA_PRIVATE_KEY",
-      provider,
-      allowMockFallback: localDevAllowMocks,
-      validatorForSchema: (schema) => runner.validatorForSchema(schema),
-    }),
-    createConnect4Agent({
-      playerId: players[1].id,
-      name: "Knox",
-      walletAddress: players[1].walletAddress,
-      privateKeyRef: "AGENT_BETA_PRIVATE_KEY",
-      provider,
-      allowMockFallback: localDevAllowMocks,
-      validatorForSchema: (schema) => runner.validatorForSchema(schema),
-    }),
-  ];
-  const activeRunner = new AgentRunner(coordinator, agents);
   const app = Fastify({ logger: true });
   await app.register(cors, {
     origin: parseCorsOrigins(env.CORS_ORIGIN),
@@ -168,23 +297,25 @@ export async function buildServer(env: NodeJS.ProcessEnv = process.env) {
   await registerRoutes(app, {
     coordinator,
     engines,
-    runner: activeRunner,
+    lobby: new ExternalLobbyService(coordinator, prizePool, rulebooks),
+    auth: new WalletAuthService(localDevAllowMocks),
     demoMatchFactory: new DemoMatchService(coordinator, prizePool, players, rulebooks),
   });
   return app;
 }
 
 function rulebooksFromEnv(env: NodeJS.ProcessEnv): Record<string, RulebookCommitment> {
+  const localDevAllowMocks = env.LOCAL_DEV_ALLOW_MOCKS === "true";
   return {
     "sovereign-bluff": {
-      rulesHash: env.SOVEREIGN_BLUFF_RULEBOOK_HASH ?? "",
-      rulesUrl: env.SOVEREIGN_BLUFF_RULEBOOK_URL ?? "",
-      rulesVersion: env.SOVEREIGN_BLUFF_RULEBOOK_VERSION ?? "",
+      rulesHash: env.SOVEREIGN_BLUFF_RULEBOOK_HASH ?? (localDevAllowMocks ? localDevRulesHash() : ""),
+      rulesUrl: env.SOVEREIGN_BLUFF_RULEBOOK_URL ?? (localDevAllowMocks ? "local-dev-rulebook-not-0g" : ""),
+      rulesVersion: env.SOVEREIGN_BLUFF_RULEBOOK_VERSION ?? (localDevAllowMocks ? "local-dev" : ""),
     },
     connect4: {
-      rulesHash: env.CONNECT4_RULEBOOK_HASH ?? "",
-      rulesUrl: env.CONNECT4_RULEBOOK_URL ?? "",
-      rulesVersion: env.CONNECT4_RULEBOOK_VERSION ?? "",
+      rulesHash: env.CONNECT4_RULEBOOK_HASH ?? (localDevAllowMocks ? localDevRulesHash() : ""),
+      rulesUrl: env.CONNECT4_RULEBOOK_URL ?? (localDevAllowMocks ? "local-dev-rulebook-not-0g" : ""),
+      rulesVersion: env.CONNECT4_RULEBOOK_VERSION ?? (localDevAllowMocks ? "local-dev" : ""),
     },
   };
 }
@@ -253,7 +384,7 @@ export function validateStartup(env: NodeJS.ProcessEnv): void {
     "AGENT_ALPHA_PRIVATE_KEY",
     "AGENT_BETA_PRIVATE_KEY",
   ].filter((key) => !env[key]);
-  if (missingContractEnv.length) {
+  if (!(localDevAllowMocks && env.LOCAL_DEV_PRIZE_POOL === "mock") && missingContractEnv.length) {
     throw new Error(
       `PAYOUT_MODE=contract requires live prize pool env: missing ${missingContractEnv.join(", ")}`,
     );
@@ -264,6 +395,10 @@ export function validateStartup(env: NodeJS.ProcessEnv): void {
       throw new Error(`ARCHIVE_MODE=0g requires ${missingArchiveEnv.join(", ")}`);
     }
   }
+}
+
+function keyFor(gameId: string, walletAddress: string): string {
+  return `${gameId}:${walletAddress.toLowerCase()}`;
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1])) {

@@ -208,13 +208,6 @@ export async function createDemoMatch(gameId?: string): Promise<DemoMatchRespons
   });
 }
 
-export async function startDemoAgents(matchId: string): Promise<void> {
-  await request("/agents/demo/start", {
-    method: "POST",
-    body: JSON.stringify({ matchId }),
-  });
-}
-
 export async function getMatchUi(matchId: string): Promise<MatchUiResponse> {
   return request(`/match/${encodeURIComponent(matchId)}/ui`);
 }
