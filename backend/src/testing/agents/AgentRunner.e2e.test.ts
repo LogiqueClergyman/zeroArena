@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { Connect4 } from "@zeroarena/game-connect4";
 import { AgentRunner } from "./AgentRunner.js";
 import { createConnect4Agent } from "./connect4Agents.js";
 import type {
@@ -12,10 +13,9 @@ import {
   type ArchiveGateway,
   type PrizePoolGateway,
   type PrizePoolStatus,
-} from "../core/MatchCoordinator.js";
-import type { FundingTxReceipt, Player } from "../core/types.js";
-import { Connect4 } from "../games/Connect4.js";
-import { runLocalSovereignBluffE2E } from "../testing/localSovereignBluffHarness.js";
+} from "../../core/MatchCoordinator.js";
+import type { FundingTxReceipt, Player } from "../../core/types.js";
+import { runLocalSovereignBluffE2E } from "../localSovereignBluffHarness.js";
 
 test("AgentRunner completes a full Sovereign Bluff match through the real phase protocol", async () => {
   const result = await runLocalSovereignBluffE2E();

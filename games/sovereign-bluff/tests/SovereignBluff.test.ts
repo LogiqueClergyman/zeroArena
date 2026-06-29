@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { SovereignBluff } from "./SovereignBluff.js";
-import type { GameState } from "../core/types.js";
+import type { GameState } from "@zeroarena/game-sdk";
+import { SovereignBluff } from "../src/index.js";
 
 const players = ["alpha", "beta"];
 

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import type { GameState } from "../core/types.js";
-import { Connect4, type Connect4Board } from "./Connect4.js";
+import type { GameState } from "@zeroarena/game-sdk";
+import { Connect4, type Connect4Board } from "../src/index.js";
 
 const engine = new Connect4();
 const players = ["alpha", "beta"];

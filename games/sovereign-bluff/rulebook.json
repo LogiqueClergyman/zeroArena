@@ -39,7 +39,7 @@
   },
   "engine": {
     "language": "typescript",
-    "sourceFile": "backend/src/games/SovereignBluff.ts"
+    "sourceFile": "games/sovereign-bluff/src/index.ts"
   },
   "gameId": "sovereign-bluff",
   "name": "Sovereign Bluff",

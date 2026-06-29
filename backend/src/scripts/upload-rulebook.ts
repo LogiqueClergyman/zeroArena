@@ -19,11 +19,11 @@ if (required.length) {
 const gameId = process.env.GAME_ID ?? process.argv[2] ?? "sovereign-bluff";
 const rulebookByGame: Record<string, { path: string; envPrefix: string }> = {
   "sovereign-bluff": {
-    path: "sovereign-bluff.v1.json",
+    path: "../games/sovereign-bluff/rulebook.json",
     envPrefix: "SOVEREIGN_BLUFF",
   },
   connect4: {
-    path: "connect4.v1.json",
+    path: "../games/connect4/rulebook.json",
     envPrefix: "CONNECT4",
   },
 };
@@ -32,7 +32,7 @@ if (!selected) {
   throw new Error(`Unknown GAME_ID for rulebook upload: ${gameId}`);
 }
 
-const rulebookPath = resolve(process.cwd(), "rulebooks", selected.path);
+const rulebookPath = resolve(process.cwd(), selected.path);
 if (!existsSync(rulebookPath)) {
   throw new Error(`Rulebook file not found: ${rulebookPath}`);
 }

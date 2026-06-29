@@ -1,4 +1,4 @@
-import type { IGameEngine } from "../games/IGameEngine.js";
+import type { IGameEngine } from "@zeroarena/game-sdk";
 import { MatchStore } from "./MatchStore.js";
 import type {
   AgentInferenceSummary,

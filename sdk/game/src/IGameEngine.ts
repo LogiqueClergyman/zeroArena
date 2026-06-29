@@ -3,7 +3,7 @@ import type {
   PlayerId,
   TerminationResult,
   ValidationResult,
-} from "../core/types.js";
+} from "./types.js";
 
 export interface UIRenderPayload {
   kind: string;

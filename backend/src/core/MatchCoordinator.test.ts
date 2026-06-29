@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { Connect4, type Connect4Board } from "../games/Connect4.js";
-import { SovereignBluff } from "../games/SovereignBluff.js";
+import { Connect4, type Connect4Board } from "@zeroarena/game-connect4";
+import { SovereignBluff } from "@zeroarena/game-sovereign-bluff";
 import {
   MatchCoordinator,
   type ArchiveGateway,

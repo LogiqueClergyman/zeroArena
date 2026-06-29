@@ -1,3 +1,7 @@
+import type { GameState, PlayerId, TerminationResult, ValidationResult } from "@zeroarena/game-sdk";
+
+export type { GameState, PlayerId, TerminationResult, ValidationResult } from "@zeroarena/game-sdk";
+
 export type MatchStatus =
   | "waiting"
   | "active"
@@ -6,36 +10,11 @@ export type MatchStatus =
   | "paid"
   | "failed";
 
-export type PlayerId = string;
-
 export interface Player {
   id: PlayerId;
   name: string;
   walletAddress: string;
   agentKind: "mock" | "0g-serving";
-}
-
-export interface GameState {
-  gameId: string;
-  board: unknown;
-  currentPlayer?: PlayerId;
-  players: PlayerId[];
-  round: number;
-  status: "waiting" | "active" | "finished";
-  winner?: PlayerId;
-  publicContext?: unknown;
-}
-
-export interface ValidationResult {
-  ok: boolean;
-  error?: string;
-}
-
-export interface TerminationResult {
-  finished: boolean;
-  outcome?: "winner" | "draw";
-  winner?: PlayerId;
-  reason?: string;
 }
 
 export interface TurnRecord {

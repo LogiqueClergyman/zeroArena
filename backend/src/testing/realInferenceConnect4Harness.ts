@@ -1,11 +1,11 @@
 import { config as loadEnv } from "dotenv";
 import { resolve } from "node:path";
-import { AgentRunner } from "../agents/AgentRunner.js";
-import { createConnect4Agent } from "../agents/connect4Agents.js";
-import { ZeroGServingProvider } from "../agents/providers/ZeroGServingProvider.js";
+import { Connect4 } from "@zeroarena/game-connect4";
+import { AgentRunner } from "./agents/AgentRunner.js";
+import { createConnect4Agent } from "./agents/connect4Agents.js";
+import { ZeroGServingProvider } from "./agents/providers/ZeroGServingProvider.js";
 import { MatchCoordinator } from "../core/MatchCoordinator.js";
 import type { MatchReceipt, Player } from "../core/types.js";
-import { Connect4 } from "../games/Connect4.js";
 import { ContractPrizePoolAdapter } from "../integrations/ContractPrizePoolAdapter.js";
 import { ZeroGStorageAdapter } from "../integrations/ZeroGStorageAdapter.js";
 

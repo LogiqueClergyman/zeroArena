@@ -1,9 +1,9 @@
-import { AgentRunner } from "../agents/AgentRunner.js";
-import { createAggressiveAgent, createCautiousAgent } from "../agents/demoAgents.js";
-import { ZeroGServingProvider } from "../agents/providers/ZeroGServingProvider.js";
+import { SovereignBluff } from "@zeroarena/game-sovereign-bluff";
+import { AgentRunner } from "./agents/AgentRunner.js";
+import { createAggressiveAgent, createCautiousAgent } from "./agents/demoAgents.js";
+import { ZeroGServingProvider } from "./agents/providers/ZeroGServingProvider.js";
 import { MatchCoordinator } from "../core/MatchCoordinator.js";
 import type { MatchReceipt, Player } from "../core/types.js";
-import { SovereignBluff } from "../games/SovereignBluff.js";
 import { ContractPrizePoolAdapter } from "../integrations/ContractPrizePoolAdapter.js";
 import { ZeroGStorageAdapter } from "../integrations/ZeroGStorageAdapter.js";
 import { validateStartup } from "../server.js";

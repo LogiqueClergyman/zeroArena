@@ -1,5 +1,4 @@
-import type { GameState, PlayerId, ValidationResult } from "../core/types.js";
-import type { IGameEngine, UIRenderPayload } from "./IGameEngine.js";
+import type { GameState, IGameEngine, PlayerId, UIRenderPayload, ValidationResult } from "@zeroarena/game-sdk";
 
 export const connect4ActionSchema = {
   type: "object",

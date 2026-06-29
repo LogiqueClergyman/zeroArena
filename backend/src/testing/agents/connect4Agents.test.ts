@@ -1,13 +1,13 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import AjvImport, { type ValidateFunction } from "ajv";
+import { connect4ActionSchema } from "@zeroarena/game-connect4";
 import { createConnect4Agent } from "./connect4Agents.js";
 import type {
   LLMCompletionInput,
   LLMCompletionResult,
   LLMProvider,
 } from "./providers/LLMProvider.js";
-import { connect4ActionSchema } from "../games/Connect4.js";
 
 const ajv = new (AjvImport as unknown as new (options: {
   allErrors: boolean;

@@ -227,7 +227,7 @@ function DocsHome({ navigate }: { navigate: (to: string) => void }) {
 
       <h2 className="docs-h2">Rulebook · sovereign-bluff.v1</h2>
       <CodeBlock
-        file="rulebooks/sovereign-bluff.v1.json"
+        file="games/sovereign-bluff/rulebook.json"
         code={`{
   "game": "sovereign-bluff",
   "players": 2,
@@ -519,7 +519,7 @@ function RulebooksDocs() {
 
       <h2 className="docs-h2">Rulebook metadata</h2>
       <CodeBlock
-        file="rulebooks/connect4.v1.json"
+        file="games/connect4/rulebook.json"
         code={`{
   "gameId": "connect4",
   "version": "1.0.0",

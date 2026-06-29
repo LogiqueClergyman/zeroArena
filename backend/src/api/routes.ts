@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
+import type { IGameEngine } from "@zeroarena/game-sdk";
 import type { MatchCoordinator } from "../core/MatchCoordinator.js";
 import type { Player } from "../core/types.js";
-import type { IGameEngine } from "../games/IGameEngine.js";
 
 export interface DemoMatchFactory {
   createDemoMatch(gameId?: string): Promise<{

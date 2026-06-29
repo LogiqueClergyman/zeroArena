@@ -13,13 +13,12 @@ import {
 } from "./api/routes.js";
 import { MatchCoordinator, type RulebookCommitment } from "./core/MatchCoordinator.js";
 import type { Player } from "./core/types.js";
-import { Connect4 } from "./games/Connect4.js";
-import type { IGameEngine } from "./games/IGameEngine.js";
-import { SovereignBluff } from "./games/SovereignBluff.js";
+import type { IGameEngine } from "@zeroarena/game-sdk";
+import { loadBuiltInGames } from "./game-registry/index.js";
 import { MockArchiveAdapter } from "./integrations/MockArchiveAdapter.js";
 import { ZeroGStorageAdapter } from "./integrations/ZeroGStorageAdapter.js";
 import { ContractPrizePoolAdapter } from "./integrations/ContractPrizePoolAdapter.js";
-import { LocalDevPrizePoolAdapter, localDevRulesHash } from "./integrations/LocalDevPrizePoolAdapter.js";
+import { LocalDevPrizePoolAdapter } from "./integrations/LocalDevPrizePoolAdapter.js";
 import type { PrizePoolAdapter } from "./integrations/PrizePoolAdapter.js";
 
 loadEnv({ path: resolve(process.cwd(), ".env") });
@@ -257,8 +256,11 @@ class WalletAuthService implements AuthService {
 export async function buildServer(env: NodeJS.ProcessEnv = process.env) {
   validateStartup(env);
   const localDevAllowMocks = env.LOCAL_DEV_ALLOW_MOCKS === "true";
-  const engines = [new SovereignBluff(), new Connect4()];
-  const rulebooks = rulebooksFromEnv(env);
+  const registeredGames = loadBuiltInGames(env);
+  const engines = registeredGames.map((game) => game.engine);
+  const rulebooks = Object.fromEntries(
+    registeredGames.map((game) => [game.engine.id, game.rulebook]),
+  );
   const prizePool = localDevAllowMocks && env.LOCAL_DEV_PRIZE_POOL === "mock"
     ? new LocalDevPrizePoolAdapter({
         stakeWei: env.MATCH_STAKE_WEI,
@@ -318,22 +320,6 @@ export async function buildServer(env: NodeJS.ProcessEnv = process.env) {
     demoMatchFactory: new DemoMatchService(coordinator, prizePool, players, rulebooks),
   });
   return app;
-}
-
-function rulebooksFromEnv(env: NodeJS.ProcessEnv): Record<string, RulebookCommitment> {
-  const localDevAllowMocks = env.LOCAL_DEV_ALLOW_MOCKS === "true";
-  return {
-    "sovereign-bluff": {
-      rulesHash: env.SOVEREIGN_BLUFF_RULEBOOK_HASH ?? (localDevAllowMocks ? localDevRulesHash() : ""),
-      rulesUrl: env.SOVEREIGN_BLUFF_RULEBOOK_URL ?? (localDevAllowMocks ? "local-dev-rulebook-not-0g" : ""),
-      rulesVersion: env.SOVEREIGN_BLUFF_RULEBOOK_VERSION ?? (localDevAllowMocks ? "local-dev" : ""),
-    },
-    connect4: {
-      rulesHash: env.CONNECT4_RULEBOOK_HASH ?? (localDevAllowMocks ? localDevRulesHash() : ""),
-      rulesUrl: env.CONNECT4_RULEBOOK_URL ?? (localDevAllowMocks ? "local-dev-rulebook-not-0g" : ""),
-      rulesVersion: env.CONNECT4_RULEBOOK_VERSION ?? (localDevAllowMocks ? "local-dev" : ""),
-    },
-  };
 }
 
 function parseCorsOrigins(value: string | undefined): Array<string | RegExp> {

@@ -1,6 +1,6 @@
 import AjvImport, { type ValidateFunction } from "ajv";
-import type { MatchCoordinator } from "../core/MatchCoordinator.js";
-import type { MatchReceipt } from "../core/types.js";
+import type { MatchCoordinator } from "../../core/MatchCoordinator.js";
+import type { MatchReceipt } from "../../core/types.js";
 import type { AgentStrategy, AgentTurnLog } from "./demoAgents.js";
 
 export interface AgentRunnerResult {

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { runRealInferenceConnect4E2E } from "../testing/realInferenceConnect4Harness.js";
-import { runRealInferenceSovereignBluffE2E } from "../testing/realInferenceSovereignBluffHarness.js";
+import { runRealInferenceConnect4E2E } from "../realInferenceConnect4Harness.js";
+import { runRealInferenceSovereignBluffE2E } from "../realInferenceSovereignBluffHarness.js";
 
 const enabled =
   process.env.RUN_REAL_INFERENCE_E2E === "true" ||

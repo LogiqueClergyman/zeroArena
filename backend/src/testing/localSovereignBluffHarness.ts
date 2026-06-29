@@ -1,7 +1,8 @@
-import { AgentRunner } from "../agents/AgentRunner.js";
-import { createAggressiveAgent, createCautiousAgent } from "../agents/demoAgents.js";
-import type { LLMProvider } from "../agents/providers/LLMProvider.js";
-import { ScriptedSovereignBluffProvider } from "../agents/providers/ScriptedSovereignBluffProvider.js";
+import { SovereignBluff } from "@zeroarena/game-sovereign-bluff";
+import { AgentRunner } from "./agents/AgentRunner.js";
+import { createAggressiveAgent, createCautiousAgent } from "./agents/demoAgents.js";
+import type { LLMProvider } from "./agents/providers/LLMProvider.js";
+import { ScriptedSovereignBluffProvider } from "./agents/providers/ScriptedSovereignBluffProvider.js";
 import {
   MatchCoordinator,
   type ArchiveGateway,
@@ -10,7 +11,6 @@ import {
   type RulebookCommitment,
 } from "../core/MatchCoordinator.js";
 import type { MatchReceipt, Player } from "../core/types.js";
-import { SovereignBluff } from "../games/SovereignBluff.js";
 
 const RULEBOOK: RulebookCommitment = {
   rulesHash: "0x1111111111111111111111111111111111111111111111111111111111111111",
