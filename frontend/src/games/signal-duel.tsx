@@ -32,7 +32,7 @@ const moveLabel: Record<Move, string> = { rock: "ROCK", paper: "PAPER", scissors
 const moveShort: Record<Move, string> = { rock: "R", paper: "P", scissors: "S" };
 const MOVES: Move[] = ["rock", "paper", "scissors"];
 
-type InfoTab = "banter" | "reveals" | "agents" | "settlement";
+type InfoTab = "reveals" | "agents" | "settlement";
 
 export function SignalDuelLiveScreen(props: LiveProps) {
   const { ui, data, players, winner, receipt, latestLogs, matchId, navigate, error, loading } = props;
@@ -70,7 +70,7 @@ export function SignalDuelLiveScreen(props: LiveProps) {
   const revealing = Boolean(revealEntry);
   const displayRound = revealEntry ? revealEntry.round : round;
 
-  const [tab, setTab] = useState<InfoTab>("banter");
+  const [tab, setTab] = useState<InfoTab>("reveals");
 
   const leftScore = Number(scores[left?.id ?? ""] ?? 0);
   const rightScore = Number(scores[right?.id ?? ""] ?? 0);
@@ -192,19 +192,25 @@ export function SignalDuelLiveScreen(props: LiveProps) {
               winner={winner === right?.id}
             />
           </section>
+
+          <SignalFeed
+            dialogue={dialogue}
+            players={players}
+            leftId={left?.id}
+            live={status === "active" && !settled}
+            speaker={phase === "dialogue" && !revealing && !settled ? currentPlayer : undefined}
+          />
         </div>
       </div>
 
       <section className="sd-info">
         <div className="sd-tabs">
-          <TabButton active={tab === "banter"} onClick={() => setTab("banter")} label="Duel Banter" count={dialogue.length} />
           <TabButton active={tab === "reveals"} onClick={() => setTab("reveals")} label="Reveals" count={history.length} />
           <TabButton active={tab === "agents"} onClick={() => setTab("agents")} label="Agents" count={players.length} />
           <TabButton active={tab === "settlement"} onClick={() => setTab("settlement")} label="Settlement" />
         </div>
 
         <div className="sd-tab-body">
-          {tab === "banter" ? <BanterFeed dialogue={dialogue} players={players} leftId={left?.id} /> : null}
           {tab === "reveals" ? <RevealStrip history={history} players={players} leftId={left?.id} rightId={right?.id} /> : null}
           {tab === "agents" ? (
             <div className="sd-agent-grid">
@@ -365,26 +371,73 @@ function RoundPips({
   );
 }
 
-function BanterFeed({ dialogue, players, leftId }: { dialogue: Array<{ playerId: string; round: number; turn: number; message: string }>; players: Player[]; leftId?: string }) {
-  const visible = dialogue.slice(-14);
+function SignalFeed({
+  dialogue,
+  players,
+  leftId,
+  live,
+  speaker,
+}: {
+  dialogue: Array<{ playerId: string; round: number; turn: number; message: string }>;
+  players: Player[];
+  leftId?: string;
+  live: boolean;
+  speaker?: string;
+}) {
+  const bodyRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = bodyRef.current;
+    if (el) {
+      el.scrollTop = el.scrollHeight;
+    }
+  }, [dialogue.length]);
+
   return (
-    <div className="sd-banter">
-      {visible.length === 0 ? <EmptyState text="Dialogue appears here when the first agent speaks." /> : null}
-      {visible.map((line, index) => {
-        const tone = line.playerId === leftId ? "pink" : "gold";
-        return (
-          <div className={cx("sd-banter-line", tone)} key={`${line.round}-${line.turn}-${index}`}>
-            <span className={cx("sd-banter-chip", tone)}>{initials(playerName(players, line.playerId))}</span>
-            <div className="sd-banter-body">
-              <div className="sd-banter-meta">{playerName(players, line.playerId)} · R{line.round}.{line.turn}</div>
-              <p className="sd-banter-text">{line.message}</p>
-            </div>
+    <section className="sd-feed">
+      <div className="sd-feed-head">
+        <span className="sd-feed-title">
+          <i className={cx("sd-feed-dot", live && "live")} />
+          LIVE TRANSMISSION
+        </span>
+        <span className="sd-feed-status">
+          {speaker ? (
+            <>
+              <i className="sd-feed-pulse" />
+              {playerName(players, speaker)} on the wire
+            </>
+          ) : (
+            `${dialogue.length} signal${dialogue.length === 1 ? "" : "s"} intercepted`
+          )}
+        </span>
+      </div>
+      <div className="sd-feed-body" ref={bodyRef}>
+        {dialogue.length === 0 ? (
+          <div className="sd-feed-empty">
+            <span className="sd-feed-wave-line" />
+            Channel open — agents trade pressure before the first sealed commit.
           </div>
-        );
-      })}
-    </div>
+        ) : (
+          dialogue.map((line, index) => {
+            const tone = line.playerId === leftId ? "pink" : "gold";
+            return (
+              <div className={cx("sd-feed-line", tone)} key={`${line.round}-${line.turn}-${index}`}>
+                <span className={cx("sd-feed-chip", tone)}>{initials(playerName(players, line.playerId))}</span>
+                <div className="sd-feed-msg">
+                  <span className="sd-feed-who">
+                    {playerName(players, line.playerId)}
+                    <em>R{line.round}.{line.turn}</em>
+                  </span>
+                  <p>{line.message}</p>
+                </div>
+              </div>
+            );
+          })
+        )}
+      </div>
+    </section>
   );
 }
+
 
 function RevealStrip({
   history,
