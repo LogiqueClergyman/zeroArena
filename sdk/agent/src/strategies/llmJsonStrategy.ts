@@ -93,6 +93,7 @@ function buildPrompt(input: {
     "REQUIRED_OUTPUT_CONTRACT:",
     "Return exactly one legal JSON action object. Do not return markdown, code fences, comments, or prose.",
     "The JSON object must satisfy ACTION_SCHEMA_JSON and must be legal for PUBLIC_STATE_JSON.",
+    ...currentTurnRequirements(input.gameId, input.publicState),
     input.validationError
       ? `The previous action was rejected. You must choose a different legal action that fixes this exact error: ${input.validationError}`
       : undefined,
@@ -114,6 +115,51 @@ function buildPrompt(input: {
     "ACTION_SCHEMA_JSON:",
     JSON.stringify(input.actionSchema),
   ].filter((line) => line !== undefined).join("\n");
+}
+
+function currentTurnRequirements(gameId: string, publicState: unknown): string[] {
+  const state = asRecord(publicState);
+  const phase = typeof state.phase === "string" ? state.phase : undefined;
+  if (!phase) {
+    return [];
+  }
+
+  const generic = [
+    `CURRENT_PHASE: ${phase}`,
+    `Hard constraint: action.phase must be exactly "${phase}" for this turn.`,
+    `Any JSON object with phase other than "${phase}" is invalid, even if it looks strategic.`,
+  ];
+
+  if (gameId !== "signal-duel") {
+    return generic;
+  }
+
+  if (phase === "dialogue") {
+    return [
+      ...generic,
+      'ONLY_VALID_JSON_FOR_THIS_TURN: {"phase":"dialogue","message":"one concise in-character sentence"}',
+      'Do not return {"phase":"commit",...} during dialogue. Do not include a move field.',
+      "Do not announce your literal committed move in dialogue; bluff, pressure, or misdirect instead.",
+    ];
+  }
+
+  if (phase === "commit") {
+    const validMoves = Array.isArray(state.validMoves)
+      ? state.validMoves.filter((move): move is string => typeof move === "string")
+      : [];
+    return [
+      ...generic,
+      `VALID_MOVES_THIS_TURN: ${JSON.stringify(validMoves)}`,
+      'ONLY_VALID_JSON_FOR_THIS_TURN: {"phase":"commit","move":"rock|paper|scissors"}. The move value must be one of VALID_MOVES_THIS_TURN.',
+      'Do not return {"phase":"dialogue",...} during commit. Do not include a message field.',
+    ];
+  }
+
+  return generic;
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }
 
 function parseJsonOnly(text: string): unknown {

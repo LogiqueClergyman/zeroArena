@@ -3,10 +3,11 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "install:all": "npm install --prefix sdk/game && npm install --prefix games/connect4 && npm install --prefix games/sovereign-bluff && npm install --prefix backend && npm install --prefix contracts && npm install --prefix frontend && npm install --prefix sdk/agent && npm install --prefix operator && npm install --prefix operator/web",
+    "install:all": "npm install --prefix sdk/game && npm install --prefix games/connect4 && npm install --prefix games/sovereign-bluff && npm install --prefix games/signal-duel && npm install --prefix backend && npm install --prefix contracts && npm install --prefix frontend && npm install --prefix sdk/agent && npm install --prefix operator && npm install --prefix operator/web",
     "test": "npm run test:games && npm test --prefix backend && npm test --prefix sdk/agent && npm test --prefix contracts && npm run build --prefix frontend",
-    "test:games": "npm test --prefix sdk/game && npm test --prefix games/connect4 && npm test --prefix games/sovereign-bluff",
+    "test:games": "npm test --prefix sdk/game && npm test --prefix games/connect4 && npm test --prefix games/sovereign-bluff && npm test --prefix games/signal-duel",
     "e2e:external-connect4": "node scripts/external-connect4-e2e.mjs",
+    "e2e:external-signal-duel": "node scripts/external-signal-duel-e2e.mjs",
     "verify:e2e": "node scripts/e2e-check.mjs",
     "operator:smoke": "node scripts/operator-smoke.mjs"
   }

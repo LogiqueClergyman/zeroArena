@@ -384,6 +384,9 @@ export function validateStartup(env: NodeJS.ProcessEnv): void {
     "CONNECT4_RULEBOOK_HASH",
     "CONNECT4_RULEBOOK_URL",
     "CONNECT4_RULEBOOK_VERSION",
+    "SIGNAL_DUEL_RULEBOOK_HASH",
+    "SIGNAL_DUEL_RULEBOOK_URL",
+    "SIGNAL_DUEL_RULEBOOK_VERSION",
     "AGENT_ALPHA_PRIVATE_KEY",
     "AGENT_BETA_PRIVATE_KEY",
   ].filter((key) => !env[key]);

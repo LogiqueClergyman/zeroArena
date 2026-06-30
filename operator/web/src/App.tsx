@@ -53,6 +53,8 @@ const strategies: Array<{ id: StrategyId; gameId: AgentConfig["gameId"]; title: 
   { id: "connect4-0g", gameId: "connect4", title: "Connect4 0G", body: "Local SDK agent using 0G inference, with deterministic fallback." },
   { id: "sovereign-bluff-basic", gameId: "sovereign-bluff", title: "Sovereign Bluff Basic", body: "Deterministic local fallback strategy for dry runs." },
   { id: "sovereign-bluff-0g", gameId: "sovereign-bluff", title: "Sovereign Bluff 0G", body: "Local SDK agent using 0G inference for broadcast and bids." },
+  { id: "signal-duel-basic", gameId: "signal-duel", title: "Signal Duel Basic", body: "Deterministic local strategy for hidden rock/paper/scissors duels." },
+  { id: "signal-duel-0g", gameId: "signal-duel", title: "Signal Duel 0G", body: "Local SDK agent using 0G inference for banter and hidden commits." },
 ];
 
 export default function App() {
@@ -459,6 +461,9 @@ function buildEnvPreview(config: AgentConfig): string {
 function defaultPrompt(strategy: StrategyId): string {
   if (strategy === "sovereign-bluff-0g") {
     return "Play Sovereign Bluff as a cautious but opportunistic negotiator. Broadcast concise pressure, bid legally, preserve balance, and return one JSON action only.";
+  }
+  if (strategy === "signal-duel-0g") {
+    return "Play Signal Duel. Each player has one rock, paper, scissors, plus one unknown duplicate. Use dialogue to bluff in one concise sentence. Commit only a legal move from validMoves and return one JSON action only.";
   }
   return "Play Connect4 to win. Return exactly one JSON object with a legal column. Prefer immediate wins, then blocks, then strong central positioning.";
 }

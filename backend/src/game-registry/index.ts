@@ -1,4 +1,5 @@
 import { Connect4 } from "@zeroarena/game-connect4";
+import { SignalDuel } from "@zeroarena/game-signal-duel";
 import { SovereignBluff } from "@zeroarena/game-sovereign-bluff";
 import type { IGameEngine } from "@zeroarena/game-sdk";
 import { localDevRulesHash } from "../integrations/LocalDevPrizePoolAdapter.js";
@@ -23,6 +24,13 @@ export function loadBuiltInGames(env: NodeJS.ProcessEnv): RegisteredGame[] {
       rulebook: rulebookFromEnv(env, {
         gameId: "connect4",
         envPrefix: "CONNECT4",
+      }),
+    },
+    {
+      engine: new SignalDuel(),
+      rulebook: rulebookFromEnv(env, {
+        gameId: "signal-duel",
+        envPrefix: "SIGNAL_DUEL",
       }),
     },
   ];

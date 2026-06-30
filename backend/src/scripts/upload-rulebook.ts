@@ -26,6 +26,10 @@ const rulebookByGame: Record<string, { path: string; envPrefix: string }> = {
     path: "../games/connect4/rulebook.json",
     envPrefix: "CONNECT4",
   },
+  "signal-duel": {
+    path: "../games/signal-duel/rulebook.json",
+    envPrefix: "SIGNAL_DUEL",
+  },
 };
 const selected = rulebookByGame[gameId];
 if (!selected) {

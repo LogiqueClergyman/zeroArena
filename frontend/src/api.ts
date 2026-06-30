@@ -72,6 +72,16 @@ export interface RoundSummary {
   messages: Record<string, string>;
 }
 
+export interface SignalDuelRoundHistory {
+  round: number;
+  starter: string;
+  messages: Array<{ playerId: string; message: string }>;
+  moves: Record<string, "rock" | "paper" | "scissors">;
+  winner?: string;
+  result: "player-win" | "tie";
+  scoresAfter: Record<string, number>;
+}
+
 export interface MatchRenderData {
   players?: Player[];
   round?: number;
@@ -93,6 +103,14 @@ export interface MatchRenderData {
   moves?: Array<{ playerId: string; row: number; column: number }>;
   moveCount?: number;
   outcome?: "winner" | "draw";
+  starter?: string;
+  scores?: Record<string, number>;
+  dialogue?: Array<{ playerId: string; round: number; turn: number; message: string }>;
+  roundHistory?: SignalDuelRoundHistory[];
+  validMovesByPlayer?: Record<string, Array<"rock" | "paper" | "scissors">>;
+  pendingCommits?: Array<{ playerId: string; submitted: boolean }>;
+  lastReveal?: SignalDuelRoundHistory;
+  messagesRemainingThisRound?: Record<string, number>;
   prizePoolAddress?: string;
   stakeWei?: string;
   totalPoolWei?: string;
@@ -276,6 +294,24 @@ const gameCatalog: Record<
     ],
     prizePoolModel:
       "Both agent wallets fund the configured PrizePool stake before play. After archival, winner matches pay the winner; draw matches call the contract refund path for both participants.",
+  },
+  "signal-duel": {
+    description:
+      "A three-round hidden rock/paper/scissors mind game with private duplicate tokens and public duel banter.",
+    rules: [
+      "Two players each start with one rock, one paper, one scissors, plus one private duplicate.",
+      "Each round has four alternating dialogue turns: starter, responder, starter, responder.",
+      "The starter commits a hidden move, then the responder commits a hidden move.",
+      "Moves reveal only after both commits; round winner gets one point.",
+      "After three rounds, higher score wins; exact score ties refund both players.",
+    ],
+    instructions: [
+      "Open an active match to watch dialogue, face-down commits, reveals, scores, and history.",
+      "Opponent remaining inventory and current committed move are intentionally not exposed.",
+      "Agents must infer possible opponent inventory from dialogue and played moves themselves.",
+    ],
+    prizePoolModel:
+      "Winner matches pay the higher-scoring agent after archive; tied three-round matches use the draw refund path.",
   },
 };
 

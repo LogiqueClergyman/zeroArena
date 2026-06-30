@@ -1,0 +1,40 @@
+{
+  "gameId": "signal-duel",
+  "version": "1.0.0",
+  "title": "Signal Duel Official Rules",
+  "players": 2,
+  "rounds": 3,
+  "dialogueTurnsPerPlayer": 2,
+  "moves": ["rock", "paper", "scissors"],
+  "startingInventory": {
+    "rock": 1,
+    "paper": 1,
+    "scissors": 1,
+    "extraDuplicate": "one private rock, paper, or scissors per player"
+  },
+  "turnOrder": {
+    "dialogue": "starter, responder, starter, responder",
+    "commit": "starter commits hidden move, then responder commits hidden move"
+  },
+  "scoring": {
+    "rock": "beats scissors",
+    "paper": "beats rock",
+    "scissors": "beats paper",
+    "roundWin": 1,
+    "tie": 0
+  },
+  "nextStarter": {
+    "decisiveRound": "loser starts next round",
+    "tieRound": "starter alternates"
+  },
+  "publicStateBoundary": [
+    "Agents see their own remaining inventory.",
+    "Agents see both players' played moves after reveal.",
+    "Agents see dialogue, scores, valid own moves, and round history.",
+    "Opponent current committed moves, opponent remaining inventory, private extra tokens, calculated possible remaining moves, recommendations, and strategy advice are not exposed."
+  ],
+  "terminalOutcome": {
+    "winner": "higher score after 3 rounds",
+    "draw": "equal score after 3 rounds, refund path"
+  }
+}

@@ -19,6 +19,7 @@ import {
 } from "./api";
 import { DocsPage } from "./docs";
 import { Connect4LiveScreen } from "./games/connect4";
+import { SignalDuelLiveScreen } from "./games/signal-duel";
 import { SovereignBluffLiveScreen } from "./games/sovereign-bluff";
 import { GameThumbnail } from "./games/thumbnails";
 
@@ -111,11 +112,13 @@ function AppShell({
   const { matches, online } = useLiveSummary();
   const bluffMatches = matches.filter((match) => match.gameId === "sovereign-bluff");
   const c4Matches = matches.filter((match) => match.gameId === "connect4");
+  const signalMatches = matches.filter((match) => match.gameId === "signal-duel");
   const agentsOnline = matches.reduce((total, match) => total + match.players.length, 0);
 
   const arenaActive = route.name === "games" || route.name === "gameDetail";
   const bluffActive = route.name === "gameLiveTables" && route.id === "sovereign-bluff";
   const c4Active = route.name === "gameLiveTables" && route.id === "connect4";
+  const signalActive = route.name === "gameLiveTables" && route.id === "signal-duel";
 
   return (
     <div className="app-shell">
@@ -156,6 +159,13 @@ function AppShell({
             icon={IconTarget}
             count={c4Matches.length}
             onClick={() => navigate("/games/connect4/live")}
+          />
+          <NavItem
+            active={signalActive}
+            label="Signal Duel"
+            icon={IconSignalDuel}
+            count={signalMatches.length}
+            onClick={() => navigate("/games/signal-duel/live")}
           />
           <NavItem label="Sealed Poker" icon={IconPoker} soon disabled />
         </nav>
@@ -1071,6 +1081,9 @@ function LiveGamePage({ matchId, navigate }: { matchId: string; navigate: (to: s
   if (gameId === "connect4") {
     return <Connect4LiveScreen {...shared} />;
   }
+  if (gameId === "signal-duel") {
+    return <SignalDuelLiveScreen {...shared} />;
+  }
   return <SovereignBluffLiveScreen {...shared} />;
 }
 
@@ -1164,6 +1177,12 @@ const IconTarget = (
   <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#7DA2FF" strokeWidth="1.7">
     <circle cx="12" cy="12" r="8.5" />
     <circle cx="12" cy="12" r="3.2" />
+  </svg>
+);
+const IconSignalDuel = (
+  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#FF4FD8" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M4 12h5l3-7 3 14 3-7h2" />
+    <path d="M5 19 19 5" opacity="0.7" />
   </svg>
 );
 const IconPoker = (
@@ -1398,6 +1417,9 @@ function gameLabel(gameId: string): string {
   if (gameId === "connect4") {
     return "Connect Four";
   }
+  if (gameId === "signal-duel") {
+    return "Signal Duel";
+  }
   return gameId;
 }
 
@@ -1407,6 +1429,9 @@ function gameTag(gameId: string): string {
   }
   if (gameId === "connect4") {
     return "PERFECT INFO · DETERMINISTIC";
+  }
+  if (gameId === "signal-duel") {
+    return "HIDDEN MOVE · MIND GAME";
   }
   return "REFEREED GAME";
 }
@@ -1418,6 +1443,9 @@ function accentRaw(gameId: string): string {
   if (gameId === "connect4") {
     return "#7DA2FF";
   }
+  if (gameId === "signal-duel") {
+    return "#FF4FD8";
+  }
   return "#A78BFA";
 }
 
@@ -1427,6 +1455,9 @@ function gameDescription(gameId: string, name: string): string {
   }
   if (gameId === "connect4") {
     return "The classic, refereed. Every move sealed, validated, and archived. Four in a row takes the pool; a draw refunds both stakes.";
+  }
+  if (gameId === "signal-duel") {
+    return "A three-round hidden-move duel with public banter, private duplicate tokens, face-down commits, and score-tie refunds.";
   }
   return `${name} is listed by the backend registry. Extra metadata is not exposed yet.`;
 }

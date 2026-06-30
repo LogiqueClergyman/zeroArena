@@ -229,6 +229,7 @@ import {
   AgentRunner,
   Connect4BasicStrategy,
   LlmJsonStrategy,
+  SignalDuelBasicStrategy,
   SovereignBluffBasicStrategy,
   ZeroArenaClient,
   ZeroGServingProvider,
@@ -238,7 +239,7 @@ const strategyId = process.env.ZEROARENA_OPERATOR_STRATEGY;
 const walletAddress = must("AGENT_OPERATOR_WALLET_ADDRESS");
 const privateKey = process.env.AGENT_OPERATOR_PRIVATE_KEY;
 const privateKeyRef = "AGENT_OPERATOR_PRIVATE_KEY";
-const gameId = process.env.ZEROARENA_GAME_ID ?? (strategyId?.startsWith("sovereign") ? "sovereign-bluff" : "connect4");
+const gameId = process.env.ZEROARENA_GAME_ID ?? defaultGameForStrategy(strategyId);
 
 const client = new ZeroArenaClient({
   baseUrl: process.env.ZEROARENA_API_URL ?? "http://127.0.0.1:3001",
@@ -260,6 +261,7 @@ await runner.run();
 function buildStrategy() {
   if (strategyId === "connect4-basic") return new Connect4BasicStrategy();
   if (strategyId === "sovereign-bluff-basic") return new SovereignBluffBasicStrategy("measured");
+  if (strategyId === "signal-duel-basic") return new SignalDuelBasicStrategy();
   const provider = new ZeroGServingProvider({
     rpcUrl: process.env.ZERO_G_EVM_RPC_URL || process.env.EVM_RPC_URL || "https://evmrpc-testnet.0g.ai",
     providerAddress: process.env.ZERO_G_PROVIDER_ADDRESS,
@@ -288,7 +290,22 @@ function buildStrategy() {
       fallback: new SovereignBluffBasicStrategy("measured"),
     });
   }
+  if (strategyId === "signal-duel-0g") {
+    return new LlmJsonStrategy({
+      provider,
+      walletAddress,
+      privateKeyRef,
+      userPrompt: process.env.ZEROARENA_AGENT_PROMPT || defaultSignalDuelPrompt(),
+      fallback: new SignalDuelBasicStrategy(),
+    });
+  }
   throw new Error("Unsupported strategy: " + strategyId);
+}
+
+function defaultGameForStrategy(strategyId) {
+  if (strategyId?.startsWith("sovereign")) return "sovereign-bluff";
+  if (strategyId?.startsWith("signal")) return "signal-duel";
+  return "connect4";
 }
 
 function defaultConnect4Prompt() {
@@ -297,6 +314,17 @@ function defaultConnect4Prompt() {
     "Return exactly one JSON object: {\\\"column\\\": number}.",
     "Choose only from publicState.validColumns.",
     "Look for immediate wins, then blocks, then position.",
+  ].join("\\n");
+}
+
+function defaultSignalDuelPrompt() {
+  return [
+    "Play Signal Duel.",
+    "Each player started with one rock, one paper, one scissors, plus one unknown duplicate.",
+    "You can see your remaining inventory and opponent played moves.",
+    "Infer, but do not assume hidden inventory.",
+    "During dialogue, bluff or pressure in one concise sentence.",
+    "During commit, return only JSON with a legal remaining move.",
   ].join("\\n");
 }
 

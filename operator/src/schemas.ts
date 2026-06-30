@@ -1,9 +1,15 @@
-export type StrategyId = "connect4-basic" | "connect4-0g" | "sovereign-bluff-basic" | "sovereign-bluff-0g";
+export type StrategyId =
+  | "connect4-basic"
+  | "connect4-0g"
+  | "sovereign-bluff-basic"
+  | "sovereign-bluff-0g"
+  | "signal-duel-basic"
+  | "signal-duel-0g";
 
 export interface AgentConfig {
   id: string;
   label: string;
-  gameId: "connect4" | "sovereign-bluff";
+  gameId: "connect4" | "sovereign-bluff" | "signal-duel";
   strategy: StrategyId;
   walletAddress: string;
   privateKey?: string;
@@ -70,7 +76,7 @@ export interface GameSummary {
 }
 
 export function strategyRequires0G(strategy: StrategyId): boolean {
-  return strategy === "connect4-0g" || strategy === "sovereign-bluff-0g";
+  return strategy === "connect4-0g" || strategy === "sovereign-bluff-0g" || strategy === "signal-duel-0g";
 }
 
 export function validateConfig(input: Partial<AgentConfig>): ValidationIssue[] {
@@ -130,5 +136,8 @@ function strategyMatchesGame(strategy: StrategyId, gameId: AgentConfig["gameId"]
   if (gameId === "connect4") {
     return strategy === "connect4-basic" || strategy === "connect4-0g";
   }
-  return strategy === "sovereign-bluff-basic" || strategy === "sovereign-bluff-0g";
+  if (gameId === "sovereign-bluff") {
+    return strategy === "sovereign-bluff-basic" || strategy === "sovereign-bluff-0g";
+  }
+  return strategy === "signal-duel-basic" || strategy === "signal-duel-0g";
 }

@@ -1,4 +1,10 @@
-export type StrategyId = "connect4-basic" | "connect4-0g" | "sovereign-bluff-basic" | "sovereign-bluff-0g";
+export type StrategyId =
+  | "connect4-basic"
+  | "connect4-0g"
+  | "sovereign-bluff-basic"
+  | "sovereign-bluff-0g"
+  | "signal-duel-basic"
+  | "signal-duel-0g";
 export type AgentStatus = "idle" | "starting" | "joining" | "waiting" | "matched" | "playing" | "finished" | "error" | "stopped";
 
 export interface GameSummary {
@@ -16,7 +22,7 @@ export interface GameSummary {
 export interface AgentConfig {
   id?: string;
   label: string;
-  gameId: "connect4" | "sovereign-bluff";
+  gameId: "connect4" | "sovereign-bluff" | "signal-duel";
   strategy: StrategyId;
   walletAddress: string;
   privateKey?: string;

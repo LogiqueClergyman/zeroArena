@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "prebuild": "npm run build --prefix ../sdk/game && npm run build --prefix ../games/connect4 && npm run build --prefix ../games/sovereign-bluff",
+    "prebuild": "npm run build --prefix ../sdk/game && npm run build --prefix ../games/connect4 && npm run build --prefix ../games/sovereign-bluff && npm run build --prefix ../games/signal-duel",
     "build": "tsc -p tsconfig.json",
     "dev": "npm run build && node .\\dist\\server.js",
     "test": "npm run build && node --test \"dist/**/*.test.js\"",
@@ -15,18 +15,21 @@
     "test:e2e:real:connect4": "npm run build && node --test dist/testing/agents/AgentRunner.real-inference.e2e.test.js",
     "upload:rulebook": "npm run build && node dist/scripts/upload-rulebook.js",
     "upload:rulebook:connect4": "npm run build && node dist/scripts/upload-rulebook.js connect4",
+    "upload:rulebook:signal-duel": "npm run build && node dist/scripts/upload-rulebook.js signal-duel",
     "setup:compute": "npm run build && node dist/scripts/setup-compute-ledgers.js"
   },
   "dependencies": {
-    "@zeroarena/game-connect4": "file:../games/connect4",
-    "@zeroarena/game-sdk": "file:../sdk/game",
-    "@zeroarena/game-sovereign-bluff": "file:../games/sovereign-bluff",
     "@0gfoundation/0g-compute-ts-sdk": "^0.8.4",
     "@0gfoundation/0g-storage-ts-sdk": "^1.2.10",
     "@fastify/cors": "^11.2.0",
+    "@zeroarena/game-connect4": "file:../games/connect4",
+    "@zeroarena/game-sdk": "file:../sdk/game",
+    "@zeroarena/game-signal-duel": "file:../games/signal-duel",
+    "@zeroarena/game-sovereign-bluff": "file:../games/sovereign-bluff",
     "ajv": "^8.20.0",
     "dotenv": "^16.4.7",
     "ethers": "^6.13.1",
-    "fastify": "^5.8.5"
+    "fastify": "^5.8.5",
+    "zeroarena": "file:.."
   }
 }

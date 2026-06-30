@@ -13,6 +13,9 @@ export function GameThumbnail({ gameId }: { gameId: string }) {
   if (gameId === "sovereign-bluff") {
     return <SovereignBluffThumb />;
   }
+  if (gameId === "signal-duel") {
+    return <SignalDuelThumb />;
+  }
   return <FallbackThumb gameId={gameId} />;
 }
 
@@ -179,6 +182,47 @@ function SovereignBluffThumb() {
       <Diamond cx={200} cy={50} s={20} fill="url(#sbt-gold)" />
       <path d="M180 50 L200 30 L220 50 Z" fill="#fff" opacity="0.28" />
       <Diamond cx={200} cy={50} s={20} fill="none" stroke="#fff" strokeOpacity={0.4} strokeWidth={1} />
+    </svg>
+  );
+}
+
+/* ============================ SIGNAL DUEL ============================ */
+
+function SignalDuelThumb() {
+  return (
+    <svg {...svgProps} role="img" aria-label="Signal Duel cover art">
+      <defs>
+        <linearGradient id="sdt-bg" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stopColor="#09080d" />
+          <stop offset="0.5" stopColor="#21101f" />
+          <stop offset="1" stopColor="#2a1c05" />
+        </linearGradient>
+        <radialGradient id="sdt-glow" cx="0.5" cy="0.5" r="0.65">
+          <stop offset="0" stopColor="#ff4fd8" stopOpacity="0.38" />
+          <stop offset="1" stopColor="#ff4fd8" stopOpacity="0" />
+        </radialGradient>
+        <linearGradient id="sdt-card" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#1a1720" />
+          <stop offset="1" stopColor="#08070b" />
+        </linearGradient>
+      </defs>
+      <rect width="400" height="150" fill="url(#sdt-bg)" />
+      <rect width="400" height="150" fill="url(#sdt-glow)" />
+      <path d="M34 118h332" stroke="#f6b23c" strokeOpacity="0.3" strokeWidth="2" />
+      <path d="M60 44h78l24 32 28-56 30 96 24-40h96" fill="none" stroke="#ff4fd8" strokeWidth="5" strokeLinecap="round" strokeLinejoin="round" opacity="0.8" />
+      {[
+        { x: 112, y: 74, t: "ROCK", c: "#ff4fd8", r: -11 },
+        { x: 200, y: 70, t: "PAPER", c: "#f6b23c", r: 2 },
+        { x: 288, y: 74, t: "SCISSORS", c: "#ff4fd8", r: 11 },
+      ].map((card) => (
+        <g key={card.t} transform={`rotate(${card.r} ${card.x} ${card.y})`}>
+          <rect x={card.x - 42} y={card.y - 42} width="84" height="96" rx="10" fill="url(#sdt-card)" stroke={card.c} strokeOpacity="0.78" strokeWidth="2" />
+          <rect x={card.x - 32} y={card.y - 30} width="64" height="68" rx="6" fill="none" stroke={card.c} strokeOpacity="0.22" />
+          <text x={card.x} y={card.y + 4} textAnchor="middle" fill={card.c} fontFamily="ui-monospace, monospace" fontWeight="800" fontSize={card.t === "SCISSORS" ? 10 : 12}>
+            {card.t}
+          </text>
+        </g>
+      ))}
     </svg>
   );
 }
