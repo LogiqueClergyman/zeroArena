@@ -100,7 +100,7 @@ export function SignalDuelLiveScreen(props: LiveProps) {
           <header className="sd-top">
             <div className="sd-top-left">
               <button className="sd-crumb" onClick={() => navigate("/games/signal-duel")}>Signal Duel ›</button>
-              <span className={cx("sd-status", status === "failed" && "bad", status === "active" && "live")}>
+              <span className={cx("sd-status", status === "failed" && "bad", status === "active" && "lit")}>
                 <i className="sd-dot" />
                 {status.toUpperCase()}
               </span>
@@ -279,7 +279,7 @@ function Duelist({
           const live = validMoves.includes(move);
           const played = playedCount(history, player?.id, move);
           return (
-            <div className={cx("sd-token", live ? "live" : "spent")} key={move}>
+            <div className={cx("sd-token", live ? "lit" : "spent")} key={move}>
               <span className="sd-token-glyph">{moveShort[move]}</span>
               <span className="sd-token-label">{moveLabel[move]}</span>
               {played > 0 ? <span className="sd-token-played">×{played} played</span> : null}
@@ -288,7 +288,7 @@ function Duelist({
         })}
       </div>
 
-      <div className={cx("sd-duelist-status", thinking && "live")}>
+      <div className={cx("sd-duelist-status", thinking && "lit")}>
         {thinking ? <i className="sd-spinner" /> : null}
         <span>{status}</span>
       </div>

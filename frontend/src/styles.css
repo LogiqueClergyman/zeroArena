@@ -2906,8 +2906,8 @@ code,
   border-radius: 999px; padding: 0 12px; font: 800 11px var(--mono); letter-spacing: 0.06em;
 }
 .sd-status .sd-dot { width: 7px; height: 7px; border-radius: 50%; background: #f6b23c; }
-.sd-status.live { border-color: rgba(255, 79, 216, 0.4); color: #ff7fe2; background: rgba(255, 79, 216, 0.1); }
-.sd-status.live .sd-dot { background: #ff4fd8; animation: sd-blink 1.4s ease-in-out infinite; }
+.sd-status.lit { border-color: rgba(255, 79, 216, 0.4); color: #ff7fe2; background: rgba(255, 79, 216, 0.1); }
+.sd-status.lit .sd-dot { background: #ff4fd8; animation: sd-blink 1.4s ease-in-out infinite; }
 .sd-status.bad { border-color: rgba(255, 104, 130, 0.4); color: #ff8aa0; background: rgba(255, 104, 130, 0.08); }
 .sd-status.bad .sd-dot { background: #ff8aa0; }
 .sd-id {
@@ -2952,7 +2952,7 @@ code,
 .sd-pip.done.tie .sd-pip-bar { background: #6b6270; }
 
 /* ---- Stage ---- */
-.sd-stage { display: grid; grid-template-columns: minmax(0, 1fr) minmax(300px, 1.2fr) minmax(0, 1fr); gap: 14px; align-items: center; }
+.sd-stage { display: grid; grid-template-columns: minmax(0, 1fr) minmax(300px, 1.2fr) minmax(0, 1fr); gap: 14px; align-items: start; }
 
 /* ---- Duelist ---- */
 .sd-duelist {
@@ -2990,24 +2990,25 @@ code,
 .sd-duelist.gold .sd-plate-num { margin-left: 0; margin-right: auto; }
 .sd-duelist.pink .sd-plate-num { color: #ff4fd8; }
 .sd-duelist.gold .sd-plate-num { color: #f6b23c; }
-.sd-token-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.sd-token-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; align-content: start; }
 .sd-token {
-  display: flex; flex-direction: column; align-items: center; gap: 5px; text-align: center;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; text-align: center;
+  min-height: 0; align-self: start;
   border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 8px; padding: 8px 4px; background: #09080d;
 }
 .sd-token-glyph { width: 26px; height: 26px; border-radius: 6px; display: grid; place-items: center; font: 900 13px var(--mono); background: rgba(255, 255, 255, 0.06); color: #706676; }
 .sd-token-label { font: 800 10px var(--mono); color: #706676; letter-spacing: 0.04em; }
 .sd-token-played { font: 9px var(--mono); color: #5f5667; }
-.sd-token.live { border-color: rgba(255, 255, 255, 0.16); }
-.sd-duelist.pink .sd-token.live .sd-token-glyph { background: rgba(255, 79, 216, 0.16); color: #ffddf7; }
-.sd-duelist.pink .sd-token.live .sd-token-label { color: #ffddf7; }
-.sd-duelist.gold .sd-token.live .sd-token-glyph { background: rgba(246, 178, 60, 0.18); color: #ffe8b8; }
-.sd-duelist.gold .sd-token.live .sd-token-label { color: #ffe8b8; }
+.sd-token.lit { border-color: rgba(255, 255, 255, 0.16); }
+.sd-duelist.pink .sd-token.lit .sd-token-glyph { background: rgba(255, 79, 216, 0.16); color: #ffddf7; }
+.sd-duelist.pink .sd-token.lit .sd-token-label { color: #ffddf7; }
+.sd-duelist.gold .sd-token.lit .sd-token-glyph { background: rgba(246, 178, 60, 0.18); color: #ffe8b8; }
+.sd-duelist.gold .sd-token.lit .sd-token-label { color: #ffe8b8; }
 .sd-token.spent { opacity: 0.4; }
 .sd-token.spent .sd-token-label { text-decoration: line-through; }
 .sd-duelist-status { display: flex; align-items: center; gap: 8px; color: #8d8190; font: 700 11px var(--mono); letter-spacing: 0.06em; text-transform: uppercase; }
 .sd-duelist.gold .sd-duelist-status { flex-direction: row-reverse; }
-.sd-duelist-status.live { color: #ffd8f5; }
+.sd-duelist-status.lit { color: #ffd8f5; }
 .sd-spinner { width: 12px; height: 12px; border-radius: 50%; border: 2px solid rgba(255, 79, 216, 0.25); border-top-color: #ff4fd8; animation: sd-spin 0.8s linear infinite; }
 .sd-duelist.gold .sd-spinner { border-color: rgba(246, 178, 60, 0.25); border-top-color: #f6b23c; }
 @keyframes sd-spin { to { transform: rotate(360deg); } }
