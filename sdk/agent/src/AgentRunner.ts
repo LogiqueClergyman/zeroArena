@@ -109,6 +109,7 @@ export class AgentRunner {
           provider: decision.provider,
           model: decision.model,
           latencyMs: decision.latencyMs,
+          debugThought: decision.debugThought,
           fallbackReason: decision.fallbackReason,
         }));
         return;

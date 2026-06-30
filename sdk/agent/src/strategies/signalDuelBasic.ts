@@ -27,7 +27,7 @@ export class SignalDuelBasicStrategy implements AgentStrategy {
     return {
       action: {
         phase: "commit",
-        move: chooseSignalMove(state),
+        move: chooseSignalMove(state, input.playerId),
       },
       source: "deterministic",
       fallbackReason: input.reason,
@@ -36,15 +36,15 @@ export class SignalDuelBasicStrategy implements AgentStrategy {
 }
 
 const dialogueLines = [
-  "I left you the obvious read for a reason.",
-  "Your cleanest counter is already poisoned.",
-  "Keep chasing the pattern; it owes me points.",
-  "I only need one bad read from you.",
-  "That last reveal was bait, not evidence.",
-  "The table is louder than my hand.",
+  "You have to respect the extra rock somewhere, so I might make paper look safer than it is.",
+  "If your duplicate is scissors, this is the round you want to spend it. I am already pricing that in.",
+  "You spent a clean reveal already, so your inventory story is thinner than your message sounds.",
+  "I think you want me covering rock pressure. That makes the obvious counter a little too obvious.",
+  "Your last reveal gave me one real fact and one fake trail. I am leaning on the fake trail.",
+  "If you are holding a duplicate paper, you need me afraid of rock. I am not giving you that for free.",
 ] as const;
 
-export function chooseSignalMove(publicState: unknown): SignalMove {
+export function chooseSignalMove(publicState: unknown, playerId?: string): SignalMove {
   const state = asRecord(publicState);
   const validMoves = Array.isArray(state.validMoves)
     ? state.validMoves.filter(isSignalMove)
@@ -55,8 +55,11 @@ export function chooseSignalMove(publicState: unknown): SignalMove {
   const myPlayedMoves = Array.isArray(state.myPlayedMoves)
     ? state.myPlayedMoves.filter(isSignalMove)
     : [];
-  const lessRepeated = validMoves.find((move) => !myPlayedMoves.includes(move));
-  return lessRepeated ?? validMoves[0] ?? "rock";
+  const candidates = validMoves.filter((move) => !myPlayedMoves.includes(move));
+  const pool = candidates.length > 1 ? candidates : validMoves;
+  const round = typeof state.round === "number" ? state.round : 0;
+  const playerOffset = playerId ? playerId.charCodeAt(0) : 0;
+  return pool[Math.abs(hash(`${playerId ?? ""}:${round}`) + playerOffset) % pool.length] ?? validMoves[0] ?? "rock";
 }
 
 function chooseDialogueLine(state: Record<string, unknown>, playerId?: string): string {

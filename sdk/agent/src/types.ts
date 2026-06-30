@@ -74,6 +74,7 @@ export interface AgentDecision {
   model?: string;
   latencyMs?: number;
   fallbackReason?: string;
+  debugThought?: string;
 }
 
 export interface AgentStrategy {

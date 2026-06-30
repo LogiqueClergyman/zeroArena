@@ -1,3 +1,4 @@
+import { randomInt } from "node:crypto";
 import type { GameState, IGameEngine, PlayerId, UIRenderPayload, ValidationResult } from "@zeroarena/game-sdk";
 
 export type SignalDuelMove = "rock" | "paper" | "scissors";
@@ -94,7 +95,7 @@ export class SignalDuel implements IGameEngine {
     }
     const [starter, responder] = players;
     const extraTokens = Object.fromEntries(
-      players.map((player, index) => [player, this.options.extraTokens?.[player] ?? MOVES[index % MOVES.length]]),
+      players.map((player) => [player, this.options.extraTokens?.[player] ?? randomExtraToken()]),
     ) as Record<PlayerId, SignalDuelMove>;
 
     return {
@@ -396,6 +397,10 @@ function inventoryWithExtra(extra: SignalDuelMove): SignalDuelInventory {
     paper: extra === "paper" ? 2 : 1,
     scissors: extra === "scissors" ? 2 : 1,
   };
+}
+
+function randomExtraToken(): SignalDuelMove {
+  return MOVES[randomInt(MOVES.length)];
 }
 
 function roundWinner(
