@@ -2878,30 +2878,32 @@ code,
 .sd-inner {
   position: relative; z-index: 1;
   max-width: 1180px; margin: 0 auto;
-  padding: 20px clamp(14px, 2vw, 28px) 36px;
-  display: flex; flex-direction: column; gap: 18px;
+  padding: 18px clamp(14px, 2vw, 28px) 32px;
+  display: flex; flex-direction: column; gap: 14px;
 }
 
 /* ---- Top bar ---- */
-.sd-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
-.sd-top-left, .sd-top-right { display: flex; align-items: center; gap: 10px; }
+.sd-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.sd-top-left, .sd-top-right { display: flex; align-items: center; gap: 8px; }
 .sd-crumb {
+  display: inline-flex; align-items: center; height: 32px;
   border: 0; background: none; color: #ffd8f5; cursor: pointer;
-  font: 800 13px var(--mono); letter-spacing: 0.04em; padding: 6px 2px;
+  font: 800 13px var(--mono); letter-spacing: 0.04em; padding: 0 2px;
 }
 .sd-crumb:hover { color: #fff; }
 .sd-btn {
+  display: inline-flex; align-items: center; height: 32px;
   border: 1px solid rgba(255, 79, 216, 0.4); background: rgba(10, 9, 14, 0.82);
-  color: #ffd8f5; border-radius: 8px; padding: 9px 16px; cursor: pointer;
+  color: #ffd8f5; border-radius: 8px; padding: 0 14px; cursor: pointer;
   font: 800 11px var(--mono); letter-spacing: 0.08em; transition: all 0.18s ease;
 }
 .sd-btn:hover { border-color: rgba(255, 79, 216, 0.7); box-shadow: 0 0 18px rgba(255, 79, 216, 0.25); }
 .sd-btn.ghost { border-color: rgba(246, 178, 60, 0.35); color: #f6d79a; }
 .sd-btn.ghost:hover { border-color: rgba(246, 178, 60, 0.6); box-shadow: 0 0 18px rgba(246, 178, 60, 0.2); }
 .sd-status {
-  display: inline-flex; align-items: center; gap: 7px;
+  display: inline-flex; align-items: center; gap: 7px; height: 32px;
   border: 1px solid rgba(246, 178, 60, 0.3); color: #f6b23c; background: rgba(246, 178, 60, 0.08);
-  border-radius: 999px; padding: 6px 12px; font: 800 11px var(--mono); letter-spacing: 0.06em;
+  border-radius: 999px; padding: 0 12px; font: 800 11px var(--mono); letter-spacing: 0.06em;
 }
 .sd-status .sd-dot { width: 7px; height: 7px; border-radius: 50%; background: #f6b23c; }
 .sd-status.live { border-color: rgba(255, 79, 216, 0.4); color: #ff7fe2; background: rgba(255, 79, 216, 0.1); }
@@ -2909,8 +2911,9 @@ code,
 .sd-status.bad { border-color: rgba(255, 104, 130, 0.4); color: #ff8aa0; background: rgba(255, 104, 130, 0.08); }
 .sd-status.bad .sd-dot { background: #ff8aa0; }
 .sd-id {
+  display: inline-flex; align-items: center; height: 32px;
   border: 1px solid rgba(255, 255, 255, 0.12); color: #a99aa7; background: rgba(13, 12, 18, 0.6);
-  border-radius: 999px; padding: 6px 12px; font: 700 11px var(--mono);
+  border-radius: 999px; padding: 0 12px; font: 700 11px var(--mono);
 }
 @keyframes sd-blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.25; } }
 
@@ -2949,14 +2952,14 @@ code,
 .sd-pip.done.tie .sd-pip-bar { background: #6b6270; }
 
 /* ---- Stage ---- */
-.sd-stage { display: grid; grid-template-columns: minmax(0, 1fr) minmax(300px, 1.25fr) minmax(0, 1fr); gap: 16px; align-items: stretch; }
+.sd-stage { display: grid; grid-template-columns: minmax(0, 1fr) minmax(300px, 1.2fr) minmax(0, 1fr); gap: 14px; align-items: center; }
 
 /* ---- Duelist ---- */
 .sd-duelist {
   position: relative; overflow: hidden;
-  border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 14px; padding: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 14px; padding: 16px;
   background: linear-gradient(180deg, rgba(24, 20, 28, 0.92), rgba(9, 8, 13, 0.95));
-  display: flex; flex-direction: column; gap: 16px; transition: box-shadow 0.25s ease, border-color 0.25s ease;
+  display: flex; flex-direction: column; gap: 12px; transition: box-shadow 0.25s ease, border-color 0.25s ease;
 }
 .sd-duelist::before { content: ""; position: absolute; top: 0; bottom: 0; left: 0; width: 4px; }
 .sd-duelist.pink::before { background: linear-gradient(180deg, #ff4fd8, transparent); }
@@ -2968,8 +2971,8 @@ code,
 .sd-duelist-head { display: flex; align-items: center; gap: 12px; }
 .sd-duelist.gold .sd-duelist-head { flex-direction: row-reverse; }
 .sd-avatar {
-  flex-shrink: 0; width: 46px; height: 46px; border-radius: 12px; display: grid; place-items: center;
-  font: 900 16px var(--mono); color: #07070b;
+  flex-shrink: 0; width: 42px; height: 42px; border-radius: 11px; display: grid; place-items: center;
+  font: 900 15px var(--mono); color: #07070b;
 }
 .sd-avatar.pink { background: linear-gradient(140deg, #ff4fd8, #b32ea0); }
 .sd-avatar.gold { background: linear-gradient(140deg, #f6b23c, #c2851f); }
@@ -2979,24 +2982,22 @@ code,
 .sd-wallet { color: #8d8190; font: 11px var(--mono); overflow-wrap: anywhere; }
 .sd-score-plate {
   display: flex; align-items: baseline; gap: 10px;
-  border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 10px; padding: 10px 14px; background: rgba(9, 8, 13, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 10px; padding: 8px 12px; background: rgba(9, 8, 13, 0.6);
 }
 .sd-duelist.gold .sd-score-plate { flex-direction: row-reverse; }
 .sd-plate-label { color: #8d8190; font: 700 10px var(--mono); letter-spacing: 0.1em; text-transform: uppercase; }
-.sd-plate-num { font: 900 34px var(--mono); margin-left: auto; }
+.sd-plate-num { font: 900 28px var(--mono); margin-left: auto; }
 .sd-duelist.gold .sd-plate-num { margin-left: 0; margin-right: auto; }
 .sd-duelist.pink .sd-plate-num { color: #ff4fd8; }
 .sd-duelist.gold .sd-plate-num { color: #f6b23c; }
-.sd-token-row { display: grid; gap: 8px; }
+.sd-token-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
 .sd-token {
-  display: flex; align-items: center; gap: 10px;
-  border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 8px; padding: 9px 12px; background: #09080d;
+  display: flex; flex-direction: column; align-items: center; gap: 5px; text-align: center;
+  border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 8px; padding: 8px 4px; background: #09080d;
 }
-.sd-duelist.gold .sd-token { flex-direction: row-reverse; }
-.sd-token-glyph { width: 24px; height: 24px; border-radius: 6px; display: grid; place-items: center; font: 900 13px var(--mono); flex-shrink: 0; background: rgba(255, 255, 255, 0.06); color: #706676; }
-.sd-token-label { font: 800 12px var(--mono); color: #706676; letter-spacing: 0.05em; }
-.sd-token-played { font: 11px var(--mono); color: #5f5667; margin-left: auto; }
-.sd-duelist.gold .sd-token-played { margin-left: 0; margin-right: auto; }
+.sd-token-glyph { width: 26px; height: 26px; border-radius: 6px; display: grid; place-items: center; font: 900 13px var(--mono); background: rgba(255, 255, 255, 0.06); color: #706676; }
+.sd-token-label { font: 800 10px var(--mono); color: #706676; letter-spacing: 0.04em; }
+.sd-token-played { font: 9px var(--mono); color: #5f5667; }
 .sd-token.live { border-color: rgba(255, 255, 255, 0.16); }
 .sd-duelist.pink .sd-token.live .sd-token-glyph { background: rgba(255, 79, 216, 0.16); color: #ffddf7; }
 .sd-duelist.pink .sd-token.live .sd-token-label { color: #ffddf7; }
@@ -3004,7 +3005,7 @@ code,
 .sd-duelist.gold .sd-token.live .sd-token-label { color: #ffe8b8; }
 .sd-token.spent { opacity: 0.4; }
 .sd-token.spent .sd-token-label { text-decoration: line-through; }
-.sd-duelist-status { display: flex; align-items: center; gap: 8px; color: #8d8190; font: 700 11px var(--mono); letter-spacing: 0.06em; text-transform: uppercase; margin-top: auto; }
+.sd-duelist-status { display: flex; align-items: center; gap: 8px; color: #8d8190; font: 700 11px var(--mono); letter-spacing: 0.06em; text-transform: uppercase; }
 .sd-duelist.gold .sd-duelist-status { flex-direction: row-reverse; }
 .sd-duelist-status.live { color: #ffd8f5; }
 .sd-spinner { width: 12px; height: 12px; border-radius: 50%; border: 2px solid rgba(255, 79, 216, 0.25); border-top-color: #ff4fd8; animation: sd-spin 0.8s linear infinite; }
@@ -3013,11 +3014,11 @@ code,
 
 /* ---- Center / reveal ---- */
 .sd-center {
-  position: relative; border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 14px; padding: 22px 20px;
+  position: relative; border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 14px; padding: 16px;
   background: linear-gradient(180deg, rgba(24, 20, 28, 0.9), rgba(9, 8, 13, 0.95));
-  display: flex; flex-direction: column; gap: 20px; justify-content: center; overflow: hidden;
+  display: flex; flex-direction: column; gap: 14px; overflow: hidden;
 }
-.sd-signal { height: 52px; position: relative; }
+.sd-signal { height: 34px; position: relative; }
 .sd-signal-wave {
   position: absolute; inset: 0;
   background: linear-gradient(90deg, transparent, rgba(255, 79, 216, 0.7), rgba(246, 178, 60, 0.5), transparent);
@@ -3029,9 +3030,9 @@ code,
 .sd-cards { display: grid; grid-template-columns: 1fr auto 1fr; align-items: start; gap: 14px; }
 .sd-versus { color: #6b6270; font: 900 18px var(--mono); text-align: center; align-self: center; transition: all 0.3s ease; }
 .sd-versus.hot { color: #f6b23c; text-shadow: 0 0 16px rgba(246, 178, 60, 0.6); }
-.sd-card { display: flex; flex-direction: column; gap: 8px; align-items: center; }
+.sd-card { display: flex; flex-direction: column; gap: 7px; align-items: center; }
 .sd-card-tag { font: 700 11px var(--mono); color: #8d8190; letter-spacing: 0.05em; text-align: center; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.sd-card-frame { width: 100%; aspect-ratio: 3 / 4; max-height: 168px; perspective: 900px; }
+.sd-card-frame { width: 100%; aspect-ratio: 1 / 1.12; max-height: 130px; perspective: 900px; }
 .sd-card-inner { position: relative; width: 100%; height: 100%; transform-style: preserve-3d; transition: transform 0.7s cubic-bezier(0.2, 0.8, 0.2, 1); }
 .sd-card.flip .sd-card-inner { transform: rotateY(180deg); }
 .sd-card-face {
@@ -3051,7 +3052,7 @@ code,
 .sd-card-face.back { transform: rotateY(180deg); background: linear-gradient(160deg, rgba(24, 20, 28, 0.96), #0c0a10); }
 .sd-card.pink .sd-card-face.back { border-color: rgba(255, 79, 216, 0.5); box-shadow: inset 0 0 30px rgba(255, 79, 216, 0.12); }
 .sd-card.gold .sd-card-face.back { border-color: rgba(246, 178, 60, 0.5); box-shadow: inset 0 0 30px rgba(246, 178, 60, 0.12); }
-.sd-card-glyph { font: 900 48px var(--mono); line-height: 1; }
+.sd-card-glyph { font: 900 40px var(--mono); line-height: 1; }
 .sd-card.pink .sd-card-glyph { color: #ff4fd8; }
 .sd-card.gold .sd-card-glyph { color: #f6b23c; }
 .sd-card-move { font: 800 11px var(--mono); letter-spacing: 0.12em; color: #cdbfcc; }
@@ -3064,9 +3065,9 @@ code,
 .sd-card.won .sd-card-result { color: #f6b23c; }
 .sd-card.tie .sd-card-result { color: #8d8190; }
 .sd-phase {
-  min-height: 52px; display: grid; place-items: center; text-align: center; padding: 12px 16px;
+  min-height: 44px; display: grid; place-items: center; text-align: center; padding: 10px 14px;
   border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 10px; color: #d8ccd6;
-  background: rgba(13, 12, 18, 0.6); font: 700 13px var(--mono); transition: all 0.3s ease;
+  background: rgba(13, 12, 18, 0.6); font: 700 12px var(--mono); transition: all 0.3s ease;
 }
 .sd-phase.win { border-color: rgba(246, 178, 60, 0.45); color: #ffe8b8; background: rgba(246, 178, 60, 0.1); box-shadow: 0 0 28px rgba(246, 178, 60, 0.15); }
 .sd-phase.tie { border-color: rgba(255, 79, 216, 0.4); color: #ffd8f5; background: rgba(255, 79, 216, 0.08); }
@@ -3118,11 +3119,9 @@ code,
   .sd-duelist.gold { text-align: left; }
   .sd-duelist.gold .sd-duelist-head,
   .sd-duelist.gold .sd-score-plate,
-  .sd-duelist.gold .sd-token,
   .sd-duelist.gold .sd-duelist-status { flex-direction: row; }
   .sd-duelist.gold::before { left: 0; right: auto; }
   .sd-duelist.gold .sd-plate-num { margin-left: auto; margin-right: 0; }
-  .sd-duelist.gold .sd-token-played { margin-left: auto; margin-right: 0; }
 }
 .agent-top {
   display: flex;
