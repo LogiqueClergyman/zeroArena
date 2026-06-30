@@ -14,6 +14,9 @@ dist
 **/dist
 .tmp/
 .tmp-e2e-*/
+operator/.zeroarena/
+operator/web/dist
+operator/*.log
 DEMO.md
 SESSION_E_HANDOFF.md
 SESSION_PROMPTS.md

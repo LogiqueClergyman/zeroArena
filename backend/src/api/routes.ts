@@ -34,6 +34,7 @@ export interface AuthService {
 export interface RegisterRoutesOptions {
   coordinator: MatchCoordinator;
   engines: IGameEngine[];
+  rulebooks?: Record<string, { rulesHash: string; rulesUrl: string; rulesVersion: string }>;
   lobby: LobbyService;
   auth: AuthService;
   demoMatchFactory: DemoMatchFactory;
@@ -43,7 +44,7 @@ export async function registerRoutes(
   app: FastifyInstance,
   options: RegisterRoutesOptions,
 ): Promise<void> {
-  const { coordinator, engines, lobby, auth, demoMatchFactory } = options;
+  const { coordinator, engines, rulebooks = {}, lobby, auth, demoMatchFactory } = options;
 
   app.get("/health", async () => ({ ok: true }));
 
@@ -54,6 +55,10 @@ export async function registerRoutes(
       minPlayers: engine.minPlayers,
       maxPlayers: engine.maxPlayers,
       actionSchema: engine.actionSchema,
+      rulesHash: rulebooks[engine.id]?.rulesHash,
+      rulesUrl: rulebooks[engine.id]?.rulesUrl,
+      rulesVersion: rulebooks[engine.id]?.rulesVersion,
+      active: true,
     })),
   );
 

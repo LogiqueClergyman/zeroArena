@@ -125,6 +125,10 @@ export interface GameEngineSummary {
   minPlayers: number;
   maxPlayers: number;
   actionSchema?: unknown;
+  rulesHash?: string;
+  rulesUrl?: string;
+  rulesVersion?: string;
+  active?: boolean;
 }
 
 export interface GameDetail extends GameEngineSummary {
@@ -172,7 +176,7 @@ export async function getGameDetail(gameId: string): Promise<GameDetail> {
     throw new Error(`Unknown game: ${gameId}`);
   }
   const activeMatches = liveMatches.filter((match) => match.gameId === gameId);
-  let rulebookHash: string | undefined;
+  let rulebookHash: string | undefined = game.rulesHash;
   if (activeMatches[0]) {
     try {
       const ui = await getMatchUi(activeMatches[0].matchId);
@@ -187,7 +191,7 @@ export async function getGameDetail(gameId: string): Promise<GameDetail> {
     ...catalog,
     rulebookHash,
     rulebookStatus: rulebookHash
-      ? "live rulebook hash exposed by backend"
+      ? "rulebook hash exposed by backend"
       : activeMatches.length > 0
         ? "pending from live match backend payload"
         : "not exposed by backend until a match exists",

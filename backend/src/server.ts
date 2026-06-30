@@ -315,6 +315,7 @@ export async function buildServer(env: NodeJS.ProcessEnv = process.env) {
   await registerRoutes(app, {
     coordinator,
     engines,
+    rulebooks,
     lobby: new ExternalLobbyService(coordinator, prizePool, rulebooks, engines),
     auth: new WalletAuthService(localDevAllowMocks),
     demoMatchFactory: new DemoMatchService(coordinator, prizePool, players, rulebooks),

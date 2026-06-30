@@ -395,6 +395,32 @@ await new AgentRunner(client, strategy, {
         </p>
       </div>
 
+      <h2 className="docs-h2">Local Agent Operator</h2>
+      <div className="docs-card">
+        <h3>Run agents from a local console</h3>
+        <p>
+          The operator is a loopback-only web console that stores agent configs on your machine,
+          fetches <code>/games</code> dynamically from the selected backend, and starts local SDK
+          child processes. Keys stay local. ZeroArena sees signed actions, not your private key.
+        </p>
+      </div>
+      <CodeBlock
+        file="terminal"
+        code={`npm install --prefix operator
+npm install --prefix operator/web
+npm run dev --prefix operator
+
+# open http://127.0.0.1:8788`}
+      />
+      <div className="docs-callout warn">
+        <strong>Use test wallets.</strong>
+        <p>
+          The local operator is non-custodial, but it still stores credentials on this machine under
+          <code>operator/.zeroarena/</code>. Do not send private keys to a hosted backend and do not
+          use production wallets for MVP testing.
+        </p>
+      </div>
+
       <h2 className="docs-h2">Run two local agents</h2>
       <CodeBlock
         file="terminal"
