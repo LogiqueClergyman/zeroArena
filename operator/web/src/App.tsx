@@ -1,8 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   Activity,
-  Check,
-  Clipboard,
+  AlertTriangle,
   ExternalLink,
   Eye,
   EyeOff,
@@ -68,7 +67,7 @@ export default function App() {
   const [backendError, setBackendError] = useState<string>();
   const [issues, setIssues] = useState<ValidationIssue[]>([]);
   const [saveState, setSaveState] = useState<string>();
-  const [activeTab, setActiveTab] = useState<"setup" | "prompt" | "validate" | "logs">("setup");
+  const [view, setView] = useState<"configure" | "runtime">("configure");
   const [showKey, setShowKey] = useState(false);
 
   const requires0G = config.strategy.endsWith("-0g");
@@ -77,8 +76,8 @@ export default function App() {
   const validation = useMemo(() => localValidation(config), [config]);
   const canStart = validation.length === 0 && Boolean(config.id);
   const selectedAgent = agents.find((agent) => agent.id === selectedAgentId) ?? agents[0];
-  const envPreview = buildEnvPreview(config);
   const arenaUrl = config.zeroArenaApiUrl.replace(/:\d+$/, ":5173");
+  const runningCount = agents.filter((agent) => agent.status !== "finished" && agent.status !== "error").length;
 
   const refreshBackend = async () => {
     setBackendState("checking");
@@ -170,6 +169,7 @@ export default function App() {
     }
     const result = await startAgent(id);
     setSelectedAgentId(result.localAgentId);
+    setView("runtime");
     await refreshLocal();
   };
 
@@ -180,11 +180,23 @@ export default function App() {
       <header className="topbar">
         <div className="brand">
           <span className="brand-mark" />
-          <div>
-            <strong>ZeroArena Local Operator</strong>
-            <span>This operator starts local SDK agents. Keys stay on this machine.</span>
+          <div className="brand-text">
+            <div className="brand-row">
+              <strong>Zero<b>Arena</b></strong>
+              <span className="brand-pill">OPERATOR</span>
+            </div>
+            <span className="brand-sub">Local SDK agent control · keys stay on this machine</span>
           </div>
         </div>
+
+        <nav className="view-tabs">
+          <button className={view === "configure" ? "active" : ""} onClick={() => setView("configure")}>Configure</button>
+          <button className={view === "runtime" ? "active" : ""} onClick={() => setView("runtime")}>
+            Runtime
+            {runningCount > 0 ? <span className="view-tab-badge">{runningCount}</span> : null}
+          </button>
+        </nav>
+
         <div className={`conn ${backendState}`}>
           {backendState === "connected" ? <Wifi size={16} /> : <WifiOff size={16} />}
           <span>{backendState === "connected" ? "connected" : backendState}</span>
@@ -192,181 +204,175 @@ export default function App() {
         </div>
       </header>
 
-      <nav className="mobile-tabs">
-        {(["setup", "prompt", "validate", "logs"] as const).map((tab) => (
-          <button key={tab} className={activeTab === tab ? "active" : ""} onClick={() => setActiveTab(tab)}>
-            {tab}
-          </button>
-        ))}
-      </nav>
-
-      <main className="workspace">
-        <aside className={`panel left ${activeTab !== "setup" ? "mobile-hidden" : ""}`}>
-          <SectionTitle title="Backend" action={<IconButton label="Refresh" onClick={refreshBackend}><RefreshCw size={15} /></IconButton>} />
-          <label>
-            ZeroArena API URL
-            <input value={config.zeroArenaApiUrl} onChange={(e) => update("zeroArenaApiUrl", e.target.value)} />
-          </label>
-          {backendError ? <div className="inline-error">Reconnect/check backend URL: {backendError}</div> : null}
-
-          <SectionTitle title="Available Games" />
-          <div className="game-list">
-            {games.map((game) => (
-              <button key={game.id} className={`game-card ${config.gameId === game.id ? "active" : ""}`} onClick={() => update("gameId", game.id as AgentConfig["gameId"])}>
-                <strong>{game.name}</strong>
-                <code>{game.id}</code>
-                <span>{game.minPlayers}-{game.maxPlayers} agents · {game.active === false ? "inactive" : "active"}</span>
-                <small>{game.rulesHash ? `rulebook ${short(game.rulesHash)}` : "rulebook not exposed"}</small>
-              </button>
-            ))}
-            {games.length === 0 ? <Empty text={backendState === "connected" ? "No games returned by /games." : "Backend offline. The console still works for saved configs."} /> : null}
-          </div>
-
-          <SectionTitle title="Strategy" />
-          <div className="strategy-list">
-            {filteredStrategies.map((item) => (
-              <button key={item.id} className={config.strategy === item.id ? "active" : ""} onClick={() => update("strategy", item.id)}>
-                <strong>{item.title}</strong>
-                <span>{item.body}</span>
-              </button>
-            ))}
-          </div>
-
-          <SectionTitle title="Saved Configs" />
-          <div className="saved-list">
-            {configs.map((saved) => (
-              <button key={saved.id} onClick={() => loadSaved(saved)}>
-                <strong>{saved.label}</strong>
-                <span>{saved.gameId} · {saved.strategy}</span>
-              </button>
-            ))}
-            {configs.length === 0 ? <Empty text="No saved local configs yet." /> : null}
-          </div>
-        </aside>
-
-        <section className={`panel center ${activeTab !== "setup" && activeTab !== "prompt" ? "mobile-hidden" : ""}`}>
-          <SectionTitle title="Agent Config" />
-          <div className="form-grid">
-            <label>
-              Agent label
-              <input value={config.label} onChange={(e) => update("label", e.target.value)} />
-            </label>
-            <label>
-              Wallet address
-              <input value={config.walletAddress} onChange={(e) => update("walletAddress", e.target.value)} />
-            </label>
-          </div>
-          <label>
-            Private key
-            <div className="secret-row">
-              <input
-                type={showKey ? "text" : "password"}
-                value={config.privateKey ?? ""}
-                placeholder={config.id ? "masked after save" : "0x..."}
-                onChange={(e) => update("privateKey", e.target.value)}
-              />
-              <IconButton label={showKey ? "Hide key" : "Reveal key"} onClick={() => setShowKey(!showKey)}>
-                {showKey ? <EyeOff size={16} /> : <Eye size={16} />}
-              </IconButton>
+      {view === "configure" ? (
+        <main className="workspace">
+          <aside className="panel pick-panel">
+            <SectionTitle
+              title="Available Games"
+              action={<IconButton label="Refresh backend" onClick={refreshBackend}><RefreshCw size={15} /></IconButton>}
+            />
+            <div className="game-grid">
+              {games.map((game) => (
+                <button key={game.id} className={`game-card ${config.gameId === game.id ? "active" : ""}`} onClick={() => update("gameId", game.id as AgentConfig["gameId"])}>
+                  <strong>{game.name}</strong>
+                  <code>{game.id}</code>
+                  <span>{game.minPlayers}-{game.maxPlayers} agents · {game.active === false ? "inactive" : "active"}</span>
+                  <small>{game.rulesHash ? `rulebook ${short(game.rulesHash)}` : "rulebook not exposed"}</small>
+                </button>
+              ))}
+              {games.length === 0 ? <Empty text={backendState === "connected" ? "No games returned by /games." : "Backend offline. Saved configs still work."} /> : null}
             </div>
-          </label>
-          <label className="check-row">
-            <input type="checkbox" checked={config.allowLocalDevAuth} onChange={(e) => update("allowLocalDevAuth", e.target.checked)} />
-            Allow local-dev auth for mock/local backends
-          </label>
-          <p className="warning">This local operator stores credentials on this machine. Use test wallets. ZeroArena sees signed actions, not your private key.</p>
 
-          {requires0G ? (
-            <>
-              <SectionTitle title="0G Serving" />
-              <div className="form-grid">
-                <label>
-                  0G RPC URL
-                  <input value={config.zeroGRpcUrl ?? ""} onChange={(e) => update("zeroGRpcUrl", e.target.value)} />
-                </label>
-                <label>
-                  Provider address
-                  <input value={config.zeroGProviderAddress ?? ""} onChange={(e) => update("zeroGProviderAddress", e.target.value)} />
-                </label>
-                <label>
-                  Model
-                  <input value={config.zeroGModel ?? ""} onChange={(e) => update("zeroGModel", e.target.value)} />
-                </label>
-                <label>
-                  Request spacing ms
-                  <input type="number" value={config.requestSpacingMs} onChange={(e) => update("requestSpacingMs", Number(e.target.value))} />
-                </label>
-                <label>
-                  Temperature
-                  <input type="number" step="0.05" value={config.temperature ?? ""} onChange={(e) => update("temperature", Number(e.target.value))} />
-                </label>
-                <label>
-                  Top P
-                  <input type="number" step="0.05" value={config.topP ?? ""} onChange={(e) => update("topP", Number(e.target.value))} />
-                </label>
+            {currentGame ? (
+              <>
+                <SectionTitle title={`Strategy · ${currentGame.name}`} />
+                <div className="strategy-list">
+                  {filteredStrategies.map((item) => (
+                    <button key={item.id} className={config.strategy === item.id ? "active" : ""} onClick={() => update("strategy", item.id)}>
+                      <strong>{item.title}</strong>
+                      <span>{item.body}</span>
+                    </button>
+                  ))}
+                </div>
+              </>
+            ) : null}
+          </aside>
+
+          <section className="panel config-panel">
+            <SectionTitle title="Backend" />
+            <label>
+              ZeroArena API URL
+              <input value={config.zeroArenaApiUrl} onChange={(e) => update("zeroArenaApiUrl", e.target.value)} />
+            </label>
+            {backendError ? <div className="inline-error">Reconnect / check backend URL: {backendError}</div> : null}
+
+            <SectionTitle title="Agent Config" />
+            <div className="form-grid">
+              <label>
+                Agent label
+                <input value={config.label} onChange={(e) => update("label", e.target.value)} />
+              </label>
+              <label>
+                Wallet address
+                <input value={config.walletAddress} onChange={(e) => update("walletAddress", e.target.value)} />
+              </label>
+            </div>
+            <label>
+              Private key
+              <div className="secret-row">
+                <input
+                  type={showKey ? "text" : "password"}
+                  value={config.privateKey ?? ""}
+                  placeholder={config.id ? "masked after save" : "0x..."}
+                  onChange={(e) => update("privateKey", e.target.value)}
+                />
+                <IconButton label={showKey ? "Hide key" : "Reveal key"} onClick={() => setShowKey(!showKey)}>
+                  {showKey ? <EyeOff size={16} /> : <Eye size={16} />}
+                </IconButton>
               </div>
-            </>
-          ) : null}
+            </label>
+            <label className="check-row">
+              <input type="checkbox" checked={config.allowLocalDevAuth} onChange={(e) => update("allowLocalDevAuth", e.target.checked)} />
+              Allow local-dev auth for mock/local backends
+            </label>
+            <p className="warning">This local operator stores credentials on this machine. Use test wallets. ZeroArena sees signed actions, not your private key.</p>
 
-          <SectionTitle title="Prompt / Skill Text" />
-          <textarea value={config.prompt ?? ""} onChange={(e) => update("prompt", e.target.value)} />
+            {requires0G ? (
+              <>
+                <SectionTitle title="0G Serving" />
+                <div className="form-grid">
+                  <label>
+                    0G RPC URL
+                    <input value={config.zeroGRpcUrl ?? ""} onChange={(e) => update("zeroGRpcUrl", e.target.value)} />
+                  </label>
+                  <label>
+                    Provider address
+                    <input value={config.zeroGProviderAddress ?? ""} onChange={(e) => update("zeroGProviderAddress", e.target.value)} />
+                  </label>
+                  <label>
+                    Model
+                    <input value={config.zeroGModel ?? ""} onChange={(e) => update("zeroGModel", e.target.value)} />
+                  </label>
+                  <label>
+                    Request spacing ms
+                    <input type="number" value={config.requestSpacingMs} onChange={(e) => update("requestSpacingMs", Number(e.target.value))} />
+                  </label>
+                  <label>
+                    Temperature
+                    <input type="number" step="0.05" value={config.temperature ?? ""} onChange={(e) => update("temperature", Number(e.target.value))} />
+                  </label>
+                  <label>
+                    Top P
+                    <input type="number" step="0.05" value={config.topP ?? ""} onChange={(e) => update("topP", Number(e.target.value))} />
+                  </label>
+                </div>
+              </>
+            ) : null}
 
-          <div className="actions">
-            <button className="primary" onClick={persist}><Save size={16} />Save Config</button>
-            <button className="start" onClick={start} disabled={!canStart}><Play size={16} />Start Agent</button>
-            {saveState ? <span>{saveState}</span> : null}
+            <SectionTitle title="Prompt / Skill Text" />
+            <textarea value={config.prompt ?? ""} onChange={(e) => update("prompt", e.target.value)} />
+
+            {configs.length > 0 ? (
+              <>
+                <SectionTitle title="Saved Configs" />
+                <div className="saved-list">
+                  {configs.map((saved) => (
+                    <button key={saved.id} onClick={() => loadSaved(saved)}>
+                      <strong>{saved.label}</strong>
+                      <span>{saved.gameId} · {saved.strategy}</span>
+                    </button>
+                  ))}
+                </div>
+              </>
+            ) : null}
+
+            <div className="actions">
+              <button className="primary" onClick={persist}><Save size={16} />Save Config</button>
+              <button className="start" onClick={start} disabled={!canStart}><Play size={16} />Start Agent</button>
+              {saveState ? <span>{saveState}</span> : null}
+            </div>
+          </section>
+        </main>
+      ) : (
+        <main className="runtime">
+          <div className="agent-table">
+            <div className="table-head">
+              <span><Activity size={15} />Running agents</span>
+              <a className="head-link" href={arenaUrl} target="_blank" rel="noreferrer"><ExternalLink size={13} />Open Arena</a>
+            </div>
+            <div className="rows">
+              {agents.map((agent) => (
+                <button key={agent.id} className={selectedAgent?.id === agent.id ? "active" : ""} onClick={() => setSelectedAgentId(agent.id)}>
+                  <StatusChip status={agent.status} />
+                  <strong>{agent.label}</strong>
+                  <span>{agent.gameId}</span>
+                  <code>{short(agent.walletAddress)}</code>
+                  <span>{agent.matchId ? short(agent.matchId) : "match pending"}</span>
+                  <span>{runtime(agent.startedAt, agent.stoppedAt)}</span>
+                  <IconButton label="Stop" onClick={(event) => { event.stopPropagation(); void stopAgent(agent.id).then(refreshLocal); }}><Square size={14} /></IconButton>
+                </button>
+              ))}
+              {agents.length === 0 ? <Empty text="No running agents. Configure one, then Start Agent." /> : null}
+            </div>
           </div>
-        </section>
+          <div className="logs">
+            <div className="table-head">
+              <span><Terminal size={15} />Logs{selectedAgent ? ` · ${selectedAgent.label}` : ""}</span>
+              {selectedAgent?.matchId ? <a className="head-link" href={`${arenaUrl}/match/${selectedAgent.matchId}`} target="_blank" rel="noreferrer"><ExternalLink size={13} />Open Match</a> : null}
+            </div>
+            <pre>{logs.length ? logs.join("\n") : "Select a running agent to inspect local process logs."}</pre>
+          </div>
+        </main>
+      )}
 
-        <aside className={`panel right ${activeTab !== "validate" ? "mobile-hidden" : ""}`}>
-          <SectionTitle title="Validation" />
-          <ul className="checklist">
-            {validationChecks(config, currentGame, allIssues).map((item) => (
-              <li key={item.label} className={item.ok ? "ok" : "bad"}>
-                <span>{item.ok ? <Check size={14} /> : "!"}</span>
-                {item.label}
-              </li>
-            ))}
+      {allIssues.length > 0 ? (
+        <div className="issue-toast" role="status">
+          <div className="issue-toast-head"><AlertTriangle size={14} />{allIssues.length} thing{allIssues.length === 1 ? "" : "s"} to fix before launch</div>
+          <ul>
+            {allIssues.map((issue) => <li key={`${issue.field}-${issue.message}`}>{issue.message}</li>)}
           </ul>
-          {allIssues.map((issue) => <div className="inline-error" key={`${issue.field}-${issue.message}`}>{issue.field}: {issue.message}</div>)}
-
-          <SectionTitle title="Generated .env" action={<CopyButton text={envPreview} />} />
-          <pre className="env-preview">{envPreview}</pre>
-
-          <SectionTitle title="Equivalent Command" action={<CopyButton text={"npm run dev --prefix operator"} />} />
-          <pre className="env-preview">npm run dev --prefix operator</pre>
-          <div className="links">
-            <a href={arenaUrl} target="_blank" rel="noreferrer"><ExternalLink size={14} />Open Arena</a>
-            {selectedAgent?.matchId ? <a href={`${arenaUrl}/match/${selectedAgent.matchId}`} target="_blank" rel="noreferrer"><ExternalLink size={14} />Open Match</a> : null}
-          </div>
-        </aside>
-      </main>
-
-      <section className={`bottom-console ${activeTab !== "logs" ? "mobile-hidden" : ""}`}>
-        <div className="agent-table">
-          <div className="table-head">
-            <span><Activity size={15} />Running agents</span>
-          </div>
-          <div className="rows">
-            {agents.map((agent) => (
-              <button key={agent.id} className={selectedAgent?.id === agent.id ? "active" : ""} onClick={() => setSelectedAgentId(agent.id)}>
-                <StatusChip status={agent.status} />
-                <strong>{agent.label}</strong>
-                <span>{agent.gameId}</span>
-                <code>{short(agent.walletAddress)}</code>
-                <span>{agent.matchId ? short(agent.matchId) : "match pending"}</span>
-                <span>{runtime(agent.startedAt, agent.stoppedAt)}</span>
-                <IconButton label="Stop" onClick={(event) => { event.stopPropagation(); void stopAgent(agent.id).then(refreshLocal); }}><Square size={14} /></IconButton>
-              </button>
-            ))}
-            {agents.length === 0 ? <Empty text="No running agents. Save a config, then start one locally." /> : null}
-          </div>
         </div>
-        <div className="logs">
-          <div className="table-head"><span><Terminal size={15} />Logs</span></div>
-          <pre>{logs.length ? logs.join("\n") : "Select a running agent to inspect local process logs."}</pre>
-        </div>
-      </section>
+      ) : null}
     </div>
   );
 
@@ -399,10 +405,6 @@ function IconButton({ children, label, onClick }: { children: React.ReactNode; l
   return <button className="icon-btn" title={label} aria-label={label} onClick={onClick}>{children}</button>;
 }
 
-function CopyButton({ text }: { text: string }) {
-  return <IconButton label="Copy" onClick={() => void navigator.clipboard.writeText(text)}><Clipboard size={15} /></IconButton>;
-}
-
 function Empty({ text }: { text: string }) {
   return <div className="empty">{text}</div>;
 }
@@ -431,33 +433,6 @@ function localValidation(config: AgentConfig): ValidationIssue[] {
   return issues;
 }
 
-function validationChecks(config: AgentConfig, game: GameSummary | undefined, issues: ValidationIssue[]) {
-  return [
-    { label: "Backend game data fetched dynamically", ok: Boolean(game) },
-    { label: "Game and strategy match", ok: strategies.some((item) => item.id === config.strategy && item.gameId === config.gameId) },
-    { label: "Wallet identity configured", ok: Boolean(config.walletAddress) },
-    { label: "Keys stay local; backend receives no private key", ok: true },
-    { label: "Required fields are valid", ok: issues.length === 0 },
-  ];
-}
-
-function buildEnvPreview(config: AgentConfig): string {
-  const env: Record<string, string> = {
-    ZEROARENA_API_URL: config.zeroArenaApiUrl,
-    ZEROARENA_GAME_ID: config.gameId,
-    ZEROARENA_OPERATOR_STRATEGY: config.strategy,
-    ZEROARENA_AGENT_LABEL: config.label,
-    ZEROARENA_LOCAL_DEV_AUTH: String(config.allowLocalDevAuth),
-    AGENT_OPERATOR_WALLET_ADDRESS: config.walletAddress,
-    AGENT_OPERATOR_PRIVATE_KEY: config.privateKey ? mask(config.privateKey) : "",
-    ZERO_G_EVM_RPC_URL: config.zeroGRpcUrl ?? "",
-    ZERO_G_PROVIDER_ADDRESS: config.zeroGProviderAddress ?? "",
-    ZERO_G_SERVING_MODEL: config.zeroGModel ?? "",
-    ZERO_G_INFERENCE_REQUEST_SPACING_MS: String(config.requestSpacingMs),
-  };
-  return Object.entries(env).map(([key, value]) => `${key}=${value}`).join("\n");
-}
-
 function defaultPrompt(strategy: StrategyId): string {
   if (strategy === "sovereign-bluff-0g") {
     return "Play Sovereign Bluff as a cautious but opportunistic negotiator. Broadcast concise pressure, bid legally, preserve balance, and return one JSON action only.";
@@ -466,11 +441,6 @@ function defaultPrompt(strategy: StrategyId): string {
     return "Play Signal Duel. Each player has one rock, paper, scissors, plus one unknown duplicate. Use dialogue to bluff in one concise sentence. Commit only a legal move from validMoves and return one JSON action only.";
   }
   return "Play Connect4 to win. Return exactly one JSON object with a legal column. Prefer immediate wins, then blocks, then strong central positioning.";
-}
-
-function mask(value: string): string {
-  if (value.includes("*")) return value;
-  return value.length > 10 ? `${value.slice(0, 6)}...${value.slice(-4)}` : "********";
 }
 
 function short(value?: string): string {
