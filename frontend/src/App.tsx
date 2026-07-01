@@ -1,26 +1,20 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   createDemoMatch,
   getGameDetail,
   getGames,
   getHealth,
   getLiveMatches,
-  getMatchUi,
-  type AgentLog,
   type FundingTxReceipt,
   type GameDetail,
   type GameEngineSummary,
-  type MatchReceipt,
   type MatchStatus,
   type MatchSummary,
-  type MatchUiResponse,
   type Player,
   type RoundSummary,
 } from "./api";
 import { DocsPage } from "./docs";
-import { Connect4LiveScreen } from "./games/connect4";
-import { SignalDuelLiveScreen } from "./games/signal-duel";
-import { SovereignBluffLiveScreen } from "./games/sovereign-bluff";
+import { GameRendererHost } from "./game-renderers/GameRendererHost";
 import { GameThumbnail } from "./games/thumbnails";
 
 type Route =
@@ -1032,59 +1026,10 @@ function GameDetailPage({ gameId, navigate }: { gameId: string; navigate: (to: s
 /* ============================ LIVE ============================ */
 
 function LiveGamePage({ matchId, navigate }: { matchId: string; navigate: (to: string) => void }) {
-  const [ui, setUi] = useState<MatchUiResponse>();
-  const [error, setError] = useState<string>();
-  const [loading, setLoading] = useState(true);
-  const stableReceiptRef = useRef({ value: "", count: 0 });
-
-  useEffect(() => {
-    let stopped = false;
-    let timer: number | undefined;
-    const poll = async () => {
-      try {
-        const next = await getMatchUi(matchId);
-        if (stopped) {
-          return;
-        }
-        setUi(next);
-        setError(undefined);
-        setLoading(false);
-        if (!shouldStopPolling(next, stableReceiptRef.current)) {
-          timer = window.setTimeout(poll, 1000);
-        }
-      } catch (err) {
-        if (!stopped) {
-          setError(errorMessage(err));
-          setLoading(false);
-          timer = window.setTimeout(poll, 1000);
-        }
-      }
-    };
-    void poll();
-    return () => {
-      stopped = true;
-      if (timer) {
-        window.clearTimeout(timer);
-      }
-    };
-  }, [matchId]);
-
-  const data = ui?.render.data;
-  const players = data?.players ?? [];
-  const receipt = ui?.receipt;
-  const winner = receipt?.winner ?? data?.winner;
-  const latestLogs = useMemo(() => latestLogByPlayer(ui?.agentLogs ?? []), [ui?.agentLogs]);
-  const gameId = ui?.gameId ?? "sovereign-bluff";
-
-  const shared = { ui, data, players, winner, receipt, latestLogs, matchId, navigate, error, loading };
-
-  if (gameId === "connect4") {
-    return <Connect4LiveScreen {...shared} />;
-  }
-  if (gameId === "signal-duel") {
-    return <SignalDuelLiveScreen {...shared} />;
-  }
-  return <SovereignBluffLiveScreen {...shared} />;
+  // The platform live page is a thin shell: it delegates all game-specific
+  // rendering to the renderer registry through GameRendererHost. No
+  // `if (gameId === ...)` branching lives here anymore.
+  return <GameRendererHost matchId={matchId} navigate={navigate} />;
 }
 
 function InfoList({ title, items }: { title: string; items: string[] }) {
@@ -1331,41 +1276,6 @@ function parseRoute(): Route {
   }
   // root "/" is the marketing landing page
   return { name: "landing" };
-}
-
-function bidSubmitted(bids: Array<{ playerId: string; submitted: boolean }>, playerId?: string): boolean {
-  return Boolean(playerId && bids.find((bid) => bid.playerId === playerId)?.submitted);
-}
-
-function revealedBid(bids: Array<{ playerId: string; amount: number }>, playerId?: string): number | undefined {
-  return playerId ? bids.find((bid) => bid.playerId === playerId)?.amount : undefined;
-}
-
-function shouldStopPolling(ui: MatchUiResponse, stable: { value: string; count: number }): boolean {
-  if (ui.status === "failed") {
-    return true;
-  }
-  if (!ui.receipt) {
-    stable.value = "";
-    stable.count = 0;
-    return false;
-  }
-  const serialized = JSON.stringify(ui.receipt);
-  if (stable.value === serialized) {
-    stable.count += 1;
-  } else {
-    stable.value = serialized;
-    stable.count = 1;
-  }
-  return stable.count >= 2;
-}
-
-function latestLogByPlayer(logs: AgentLog[]): Map<string, AgentLog> {
-  const latest = new Map<string, AgentLog>();
-  for (const log of logs) {
-    latest.set(log.playerId, log);
-  }
-  return latest;
 }
 
 function playerName(players: Player[], playerId: string): string {

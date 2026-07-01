@@ -1,0 +1,48 @@
+/* ============================ GENERIC FALLBACK RENDERER ============================ */
+/* Neutral platform palette only — no game-specific colours. Scoped under          */
+/* .generic-renderer so it never bleeds into a real game's stage.                  */
+
+.generic-renderer {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.generic-renderer .generic-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.generic-renderer .generic-head .page-title {
+  margin: 0;
+  font-family: ui-monospace, "SFMono-Regular", monospace;
+}
+
+.generic-renderer .generic-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.generic-renderer .generic-json {
+  margin: 0;
+  max-height: 420px;
+  overflow: auto;
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: rgba(8, 12, 20, 0.7);
+  border: 1px solid rgba(120, 140, 180, 0.18);
+  color: #9fb3d0;
+  font-family: ui-monospace, "SFMono-Regular", monospace;
+  font-size: 12.5px;
+  line-height: 1.5;
+  white-space: pre;
+}
+
+@media (max-width: 880px) {
+  .generic-renderer .generic-grid {
+    grid-template-columns: 1fr;
+  }
+}

@@ -1,33 +1,98 @@
 import type { CSSProperties } from "react";
-import type { AgentLog, MatchReceipt, MatchUiResponse, Player } from "../api";
-import {
-  cx,
-  EmptyState,
-  EvidenceRow,
-  FundingRow,
-  StatusBanner,
-  formatMaybe,
-  formatTime,
-  playerName,
-  shortHash,
-  shortId,
-} from "./shared";
+import type { AgentLog, FundingTxReceipt, MatchReceipt, MatchUiResponse, Player } from "../../api";
+import type { GameRendererProps } from "../types";
+import "./connect4.css";
 
-type LiveProps = {
-  ui?: MatchUiResponse;
-  data?: MatchUiResponse["render"]["data"];
-  players: Player[];
-  winner?: string;
-  receipt?: MatchReceipt;
-  latestLogs: Map<string, AgentLog>;
-  matchId: string;
-  navigate: (to: string) => void;
-  error?: string;
-  loading: boolean;
-};
+/* ===== Connect4-local helpers & primitives — owned by this renderer, shared with no other game ===== */
 
-export function Connect4LiveScreen(props: LiveProps) {
-  const { ui, data, players, winner, receipt, latestLogs, matchId, navigate, error, loading } = props;
+function cx(...values: Array<string | false | undefined | null>): string {
+  return values.filter(Boolean).join(" ");
+}
+
+function playerName(players: Player[], playerId: string): string {
+  return players.find((player) => player.id === playerId)?.name ?? playerId;
+}
+
+function formatMaybe(value: unknown): string {
+  if (value === undefined || value === null || value === "") {
+    return "pending";
+  }
+  return String(value);
+}
+
+function shortId(value: string): string {
+  if (!value) {
+    return "—";
+  }
+  return value.length <= 10 ? value : `#${value.slice(-6)}`;
+}
+
+function shortHash(value?: string): string {
+  if (!value) {
+    return "";
+  }
+  if (value.length <= 18) {
+    return value;
+  }
+  return `${value.slice(0, 6)}…${value.slice(-4)}`;
+}
+
+function formatTime(value?: string): string {
+  if (!value) {
+    return "pending";
+  }
+  const time = new Date(value);
+  if (Number.isNaN(time.getTime())) {
+    return value;
+  }
+  return time.toLocaleTimeString();
+}
+
+function EmptyState({ text }: { text: string }) {
+  return <div className="empty-state">{text}</div>;
+}
+
+function StatusBanner({ label, value, tone }: { label: string; value: string; tone: "good" | "warn" | "bad" }) {
+  return (
+    <div className={cx("status-banner", tone)}>
+      <strong>{label}</strong>
+      <span>{value}</span>
+    </div>
+  );
+}
+
+function EvidenceRow({
+  label,
+  value,
+  mono,
+  tone,
+}: {
+  label: string;
+  value: string;
+  mono?: boolean;
+  tone?: "good" | "warn" | "bad";
+}) {
+  return (
+    <div className={cx("evidence-row", tone)}>
+      <span>{label}</span>
+      <strong className={mono ? "mono" : undefined}>{value}</strong>
+    </div>
+  );
+}
+
+function FundingRow({ tx }: { tx: FundingTxReceipt }) {
+  return (
+    <div className="funding-row">
+      <strong>{tx.playerId}</strong>
+      <code>{tx.txHash}</code>
+      <span>{tx.amountWei} wei</span>
+      <small>{tx.walletAddress}</small>
+    </div>
+  );
+}
+
+export function Connect4Renderer(props: GameRendererProps) {
+  const { match: ui, ui: data, players, winner, receipt, latestLogs, matchId, navigate, error, loading } = props;
   const status = ui?.status ?? "waiting";
 
   return (
